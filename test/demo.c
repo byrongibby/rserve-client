@@ -30,6 +30,15 @@ int main(void)
     printf("Failed to log in\n");
     return 1;
   }
+
+  if ((err = rserve_eval(&conn, "NULL", &rx)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(err));
+    printf("Failed to evaluate NULL return\n");
+    return 1;
+  }
+  printf("NULL return:\n");
+  rexp_print(&rx);
+  rexp_clear(&rx);
   
   if ((err = rserve_eval(&conn, "c(NA, rnorm(5))", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(err));

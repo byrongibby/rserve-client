@@ -84,7 +84,7 @@ long get_long(char* y, size_t o)
 typedef struct
 {
   RsrvCmd cmd;
-  size_t size;
+  int size;
   char *data;
 } RPacket;
 
@@ -95,10 +95,12 @@ void rpacket_clear(RPacket *rp)
   if (rp->data != NULL) free(rp->data);
 }
 
+/*
 bool rpacket_is_oob(RPacket *rp)
 {
   return false;
 }
+*/
 
 bool rpacket_is_ok(RPacket *rp)
 {
@@ -132,7 +134,7 @@ char *rpacket_to_str(char *s, size_t n, RPacket *rp)
   if (rp == NULL) {
     snprintf(s, n, "RPacket[]");
   } else {
-    snprintf(s, n, "RPacket[cmd=%#08x,len=%lu]", rp->cmd, rp->size);
+    snprintf(s, n, "RPacket[cmd=%#08x,len=%d]", rp->cmd, rp->size);
   }
   return s;
 }
@@ -270,7 +272,7 @@ int rserve_disconnect(RConnection* conn)
 typedef struct
 {
   char *data;
-  size_t size;
+  int size;
 } Buffer;
 
 int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp) 
@@ -428,7 +430,7 @@ int rserve_login(RConnection *conn, char *user, char *pwd)
   return 0;
 }
 
-int parse_response(RPacket *rp, int rsrv_ver, REXP *rx)
+int parse_response(RPacket *rp, REXP *rx)
 {
   int rxo = 0;
 
@@ -476,7 +478,7 @@ int rserve_eval(RConnection *conn, char *cmd, REXP *rx)
     return ret;
   }
 
-  if ((ret = parse_response(&rp, conn->rsrv_ver, rx)) != 0) {
+  if ((ret = parse_response(&rp, rx)) != 0) {
     rpacket_clear(&rp);
     fprintf(stderr, "ERROR: during eval, unable to parse response\n");
     return ret;
