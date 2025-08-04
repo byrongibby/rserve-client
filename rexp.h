@@ -12,7 +12,7 @@
 typedef enum
 {
   XT_NULL          = 0,
-  //XT_INT           = 1,
+  XT_INT           = 1,
   XT_DOUBLE        = 2,
   //XT_STR           = 3,
   //XT_LANG          = 4,
@@ -29,7 +29,7 @@ typedef enum
   //XT_LANG_TAG      = 23,
   //XT_VECTOR_EXP    = 26,
   //XT_VECTOR_STR    = 27,
-  //XT_ARRAY_INT     = 32,
+  XT_ARRAY_INT     = 32,
   XT_ARRAY_DOUBLE  = 33,
   //XT_ARRAY_STR     = 34,
   //XT_ARRAY_BOOL_UA = 35,

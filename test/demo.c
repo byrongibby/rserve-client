@@ -41,14 +41,16 @@ int main(void)
   rexp_clear(&rx);
 
 
-  /*
-  if (rserve_eval(&conn, "as.integer(c(1:5, NA, 7))", &rx) == 0) {
-    printf("Vector of int:\n");
-    rexp_print(&rx);
-    printf("\n");
+  if ((err = rserve_eval(&conn, "as.integer(c(1:5, NA, 7))", &rx)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(err));
+    printf("Failed to evaluate vector of int\n");
+    return 1;
   }
+  printf("Vector of int:\n");
+  rexp_print(&rx);
   rexp_clear(&rx);
 
+  /*
   if (rserve_eval(&conn, "c(TRUE, FALSE, NA, TRUE, TRUE)", &rx) == 0) {
     printf("Vector of logical:\n");
     rexp_print(&rx);

@@ -1,5 +1,3 @@
-#define CVECTOR_LINEAR_GROWTH
-
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -29,14 +27,14 @@ void rexp_clear(REXP *rx)
 {
   assert(rx);
 
-  if (rx->attr) {
-    rexp_clear(rx->attr);
-    free(rx->attr);
-  }
+  if (rx->attr) rexp_free(rx->attr);
 
   switch(rx->type) {
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
       cvector_free((double *)rx->data);
+      break;
+    case XT_INT: case XT_ARRAY_INT:
+      cvector_free((int *)rx->data);
       break;
   }
 }
@@ -47,6 +45,8 @@ bool rexp_is_symbol(REXP *rx)
 
   switch(rx->type) {
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
+      return false;
+    case XT_INT: case XT_ARRAY_INT:
       return false;
     default:
       return false;
@@ -60,6 +60,8 @@ bool rexp_is_vector(REXP *rx)
   switch(rx->type) {
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
       return true;
+    case XT_INT: case XT_ARRAY_INT:
+      return true;
     default:
       return false;
   }
@@ -72,6 +74,8 @@ bool rexp_is_list(REXP *rx)
   switch(rx->type) {
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
       return false;
+    case XT_INT: case XT_ARRAY_INT:
+      return false;
     default:
       return false;
   }
@@ -82,7 +86,7 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
   assert(rx);
   assert(buf);
 
-  int rxl, eox; // , size, i
+  int rxl, eox;
   bool has_attr, is_long;
 
   rxl = get_len(buf, rxo);
@@ -104,7 +108,7 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
 
   switch(rx->type) {
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
-      double *doubles = NULL;
+      cvector(double) doubles = NULL;
       double d;
       long l;
 
@@ -118,7 +122,26 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       rx->data = doubles;
 
       if (rxo != eox) {
-        fprintf(stderr, "Warning: double SEXP size mismatch\n");
+        fprintf(stderr, "WARN: double SEXP size mismatch\n");
+        rxo = eox;
+      }
+
+      break;
+
+    case XT_INT: case XT_ARRAY_INT:
+      cvector(int) integers = NULL;
+      int i;
+
+      while (rxo < eox) {
+        i = get_int(buf, rxo);
+        cvector_push_back(integers, i);
+        rxo += 4;
+      }
+
+      rx->data = integers;
+
+      if (rxo != eox) {
+        fprintf(stderr, "WARN: integer SEXP size mismatch\n");
         rxo = eox;
       }
 
@@ -136,7 +159,7 @@ char *rexp_to_string(REXP *rx, char *sep)
 
   if (!rx->data) return NULL;
   
-  size_t seplen = strlen(sep), len = 100 + seplen, capacity = 10 * len, size;
+  size_t seplen = strlen(sep), len = 100 + seplen, capacity = 10 * len, size = 0;
   char *string = calloc(capacity, sizeof(char));
 
   switch(rx->type) {
@@ -154,6 +177,33 @@ char *rexp_to_string(REXP *rx, char *sep)
           }
           strcat(string, sep);
           snprintf(string + strlen(string), len, "%f", *((double *)rx->data + i));
+          size = strlen(string);
+        }
+      }
+      break;
+
+    case XT_INT: case XT_ARRAY_INT:
+      if (string) {
+        if (NA_INTERNAL == *(int *)rx->data) {
+          snprintf(string, len, "%s", "NA");
+        } else {
+          snprintf(string, len, "%d", *(int *)rx->data);
+        }
+        size = strlen(string);
+        for (int i = 1; i < cvector_size((int *)rx->data); ++i) {
+          if (capacity - size < len + strlen(sep)) {
+            if ((string = realloc(string, capacity *= 2))) {
+              memset(string, 0, capacity);
+            } else {
+              break;
+            }
+          }
+          strcat(string, sep);
+          if (NA_INTERNAL == *((int *)rx->data + i)) {
+            snprintf(string + strlen(string), len, "%s", "NA");
+          } else {
+            snprintf(string + strlen(string), len, "%d", *((int *)rx->data + i));
+          }
           size = strlen(string);
         }
       }

@@ -26,4 +26,4 @@ target_link_libraries(rserve-demo rserve-client)
 ## COMPILER FLAGS
 ###########################################################
 
-target_compile_options(rserve-client PUBLIC -Wall -O3 -Os -std=c99 -g)
+target_compile_options(rserve-client PUBLIC -Wall -std=c99 -g) # -O3 -Os
