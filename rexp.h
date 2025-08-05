@@ -9,6 +9,12 @@
 #define REXP_ERROR -1
 #define REXP_SUCCESS 0
 
+typedef enum {
+  FALSE = 0,
+  TRUE  = 1,
+  NA    = -128,
+} RLogical;
+
 typedef enum
 {
   XT_NULL          = 0,
@@ -17,7 +23,7 @@ typedef enum
   //XT_STR           = 3,
   //XT_LANG          = 4,
   //XT_SYM           = 5,
-  //XT_LOGICAL       = 6,
+  XT_LOGICAL       = 6,
   //XT_S4            = 7,
   //XT_VECTOR        = 16,
   //XT_LIST          = 17,
@@ -33,8 +39,8 @@ typedef enum
   XT_ARRAY_DOUBLE  = 33,
   //XT_ARRAY_STR     = 34,
   //XT_ARRAY_BOOL_UA = 35,
-  //XT_ARRAY_BOOL    = 36,
-  //XT_RAW           = 37,
+  XT_ARRAY_BOOL    = 36,
+  XT_RAW           = 37,
   //XT_ARRAY_CPLX    = 38,
   //XT_UNKNOWN       = 48,
   //XT_FACTOR        = 127,

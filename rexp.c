@@ -36,7 +36,13 @@ void rexp_clear(REXP *rx)
     case XT_INT: case XT_ARRAY_INT:
       cvector_free((int *)rx->data);
       break;
-    case XT_NULL:
+    case XT_LOGICAL: case XT_ARRAY_BOOL:
+      cvector_free((char *)rx->data);
+      break;
+    case XT_RAW:
+      cvector_free((char *)rx->data);
+      break;
+   case XT_NULL:
       break;
   }
 }
@@ -46,11 +52,15 @@ bool rexp_is_symbol(REXP *rx)
   assert(rx);
 
   switch(rx->type) {
+    case XT_NULL:
+      return false;
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
       return false;
     case XT_INT: case XT_ARRAY_INT:
       return false;
-    case XT_NULL:
+    case XT_LOGICAL: case XT_ARRAY_BOOL:
+      return false;
+    case XT_RAW:
       return false;
     default:
       return false;
@@ -62,12 +72,16 @@ bool rexp_is_vector(REXP *rx)
   assert(rx);
 
   switch(rx->type) {
+    case XT_NULL:
+      return false;
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
       return true;
     case XT_INT: case XT_ARRAY_INT:
       return true;
-    case XT_NULL:
-      return false;
+    case XT_LOGICAL: case XT_ARRAY_BOOL:
+      return true;
+    case XT_RAW:
+      return true;
     default:
       return false;
   }
@@ -78,11 +92,15 @@ bool rexp_is_list(REXP *rx)
   assert(rx);
 
   switch(rx->type) {
+    case XT_NULL:
+      return false;
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
       return false;
     case XT_INT: case XT_ARRAY_INT:
       return false;
-    case XT_NULL:
+    case XT_LOGICAL: case XT_ARRAY_BOOL:
+      return false;
+    case XT_RAW:
       return false;
     default:
       return false;
@@ -94,7 +112,7 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
   assert(rx);
   assert(buf);
 
-  int rxl, eox;
+  int rxl, eox, size;
   bool has_attr, is_long;
 
   rxl = get_len(buf, rxo);
@@ -112,6 +130,9 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
   }
 
   switch(rx->type) {
+    case XT_NULL:
+      break;
+
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
       cvector(double) doubles = NULL;
       double d;
@@ -144,7 +165,39 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       }
       break;
 
-    case XT_NULL:
+    case XT_LOGICAL: case XT_ARRAY_BOOL:
+      size = 1;
+      if (rx->type == XT_ARRAY_BOOL) {
+        size = get_int(buf, rxo);
+        rxo += 4;
+      }
+      cvector(char) logicals = NULL;
+      char b;
+      for (int i = rxo; i < rxo + size; ++i) {
+        b = (buf[i] == TRUE || buf[i] == FALSE) ? buf[i] : NA;
+        cvector_push_back(logicals, b);
+      }
+      rx->data = logicals;
+      if (rx->type == XT_LOGICAL) {
+        rxo++;
+        if (rxo != eox) {
+          if (rxo + 3 != eox) {
+            fprintf(stderr, "Warning: logical SEXP size mismatch\n");
+          }
+        }
+      }     
+      rxo = eox;
+      break;
+
+    case XT_RAW:
+      size = get_int(buf, rxo);
+      rxo += 4;
+      cvector(char) bytes = NULL;
+      for (int i = rxo; i < rxo + size; ++i) {
+        cvector_push_back(bytes, buf[i]);
+      }
+      rx->data = bytes;
+      rxo = eox;
       break;
   }
 
@@ -160,6 +213,11 @@ char *rexp_to_string(REXP *rx, char *sep)
   char *string = calloc(capacity, sizeof(char));
 
   switch(rx->type) {
+    case XT_NULL:
+      snprintf(string, len, "%s", "NULL");
+      size = strlen(string);
+      break;
+
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
       if (string) {
         snprintf(string, len, "%f", *(double *)rx->data);
@@ -167,7 +225,7 @@ char *rexp_to_string(REXP *rx, char *sep)
         for (size_t i = 1; i < cvector_size((double *)rx->data); ++i) {
           if (capacity - size < len + strlen(sep)) {
             if ((string = realloc(string, capacity *= 2))) {
-              memset(string, 0, capacity);
+              memset(string + capacity / 2, 0, capacity);
             } else {
               break;
             }
@@ -190,7 +248,7 @@ char *rexp_to_string(REXP *rx, char *sep)
         for (size_t i = 1; i < cvector_size((int *)rx->data); ++i) {
           if (capacity - size < len + strlen(sep)) {
             if ((string = realloc(string, capacity *= 2))) {
-              memset(string, 0, capacity);
+              memset(string + capacity / 2, 0, capacity);
             } else {
               break;
             }
@@ -206,10 +264,54 @@ char *rexp_to_string(REXP *rx, char *sep)
       }
       break;
 
+    case XT_LOGICAL: case XT_ARRAY_BOOL:
+      if (string) {
+        if (TRUE == *(char *)rx->data) {
+          snprintf(string, len, "%s", "TRUE");
+        } else if (FALSE == *(char *)rx->data) {
+          snprintf(string, len, "%s", "FALSE");
+        } else {
+          snprintf(string, len, "%s", "NA");
+        }
+        size = strlen(string);
+        for (size_t i = 1; i < cvector_size((char *)rx->data); ++i) {
+          if (capacity - size < len + strlen(sep)) {
+            if ((string = realloc(string, capacity *= 2))) {
+              memset(string + capacity / 2, 0, capacity);
+            } else {
+              break;
+            }
+          }
+          strcat(string, sep);
+          if (TRUE == *((char *)rx->data + i)) {
+            snprintf(string + strlen(string), len, "%s", "TRUE");
+          } else if (FALSE == *((char *)rx->data + i)) {
+            snprintf(string + strlen(string), len, "%s", "FALSE");
+          } else {
+            snprintf(string + strlen(string), len, "%s", "NA");
+          }
+          size = strlen(string);
+        }
+      }
+      break;
 
-    case XT_NULL:
-      snprintf(string, len, "%s", "NULL");
-      size = strlen(string);
+    case XT_RAW:
+      if (string) {
+        snprintf(string, len, "%x", *(char *)rx->data);
+        size = strlen(string);
+        for (size_t i = 1; i < cvector_size((char *)rx->data); ++i) {
+          if (capacity - size < len + strlen(sep)) {
+            if ((string = realloc(string, capacity *= 2))) {
+              memset(string + capacity / 2, 0, capacity);
+            } else {
+              break;
+            }
+          }
+          strcat(string, sep);
+          snprintf(string + strlen(string), len, "%x", *((char *)rx->data + i));
+          size = strlen(string);
+        }
+      }
       break;
   }
 
