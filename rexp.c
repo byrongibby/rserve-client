@@ -15,6 +15,13 @@ extern int get_int(char* y, size_t o);
 extern void set_long(int64_t x, char* y, size_t o);
 extern long get_long(char* y, size_t o);
 
+
+static void free_string(void *str) {
+  if (str) {
+    free(*(char **)str);
+  }
+}
+
 void rexp_free(REXP *rx)
 {
   if (rx) {
@@ -42,6 +49,9 @@ void rexp_clear(REXP *rx)
     case XT_RAW:
       cvector_free((char *)rx->data);
       break;
+    case XT_STR: case XT_ARRAY_STR:
+      cvector_free((char **)rx->data);
+      break;
    case XT_NULL:
       break;
   }
@@ -61,6 +71,8 @@ bool rexp_is_symbol(REXP *rx)
     case XT_LOGICAL: case XT_ARRAY_BOOL:
       return false;
     case XT_RAW:
+      return false;
+    case XT_STR: case XT_ARRAY_STR:
       return false;
     default:
       return false;
@@ -82,6 +94,8 @@ bool rexp_is_vector(REXP *rx)
       return true;
     case XT_RAW:
       return true;
+    case XT_STR: case XT_ARRAY_STR:
+      return true;
     default:
       return false;
   }
@@ -102,6 +116,8 @@ bool rexp_is_list(REXP *rx)
       return false;
     case XT_RAW:
       return false;
+    case XT_STR: case XT_ARRAY_STR:
+      return false;
     default:
       return false;
   }
@@ -112,7 +128,7 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
   assert(rx);
   assert(buf);
 
-  int rxl, eox, size;
+  int rxl, eox, size, i;
   bool has_attr, is_long;
 
   rxl = get_len(buf, rxo);
@@ -152,7 +168,6 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
 
     case XT_INT: case XT_ARRAY_INT:
       cvector(int) integers = NULL;
-      int i;
       while (rxo < eox) {
         i = get_int(buf, rxo);
         cvector_push_back(integers, i);
@@ -199,6 +214,42 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       rx->data = bytes;
       rxo = eox;
       break;
+
+    case XT_STR: case XT_ARRAY_STR:
+      cvector(char *) strings = NULL;
+      cvector_init(strings, 1, free_string);
+      char *s;
+      i = rxo;
+      while (rxo < eox) {
+        if (buf[rxo] == 0) {
+          if (buf[i] == -1) {
+            if (buf[i + 1] == 0) {
+              s = calloc(1, sizeof(char));
+              cvector_push_back(strings, s);
+            } else {
+              s = calloc(rxo - i, sizeof(char));
+              memcpy(s, buf + i + 1, rxo - i - 1);
+              cvector_push_back(strings, s);
+            }
+          } else {
+            s = calloc(rxo - i + 1, sizeof(char));
+            memcpy(s, buf + i, rxo - i);
+            cvector_push_back(strings, s);
+          }
+          i = rxo + 1;
+        }
+        rxo++;
+      }
+      rx->data = strings;
+      rxo = eox;
+      break;
+
+      /*
+  case XT_SYMNAME:
+    for(i = rxo; buf[i] != 0 && i < eox; i++);
+    break;
+    */
+
   }
 
   return rxo;
@@ -220,9 +271,10 @@ char *rexp_to_string(REXP *rx, char *sep)
 
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
       if (string) {
-        snprintf(string, len, "%f", *(double *)rx->data);
+        cvector(double) doubles = rx->data;
+        snprintf(string, len, "%f", doubles[0]);
         size = strlen(string);
-        for (size_t i = 1; i < cvector_size((double *)rx->data); ++i) {
+        for (size_t i = 1; i < cvector_size(doubles); ++i) {
           if (capacity - size < len + strlen(sep)) {
             if ((string = realloc(string, capacity *= 2))) {
               memset(string + capacity / 2, 0, capacity);
@@ -231,7 +283,7 @@ char *rexp_to_string(REXP *rx, char *sep)
             }
           }
           strcat(string, sep);
-          snprintf(string + strlen(string), len, "%f", *((double *)rx->data + i));
+          snprintf(string + strlen(string), len, "%f", doubles[i]);
           size = strlen(string);
         }
       }
@@ -239,13 +291,14 @@ char *rexp_to_string(REXP *rx, char *sep)
 
     case XT_INT: case XT_ARRAY_INT:
       if (string) {
-        if (NA_INTERNAL == *(int *)rx->data) {
+        cvector(int) integers = rx->data;
+        if (NA_INTERNAL == integers[0]) {
           snprintf(string, len, "%s", "NA");
         } else {
-          snprintf(string, len, "%d", *(int *)rx->data);
+          snprintf(string, len, "%d", integers[0]);
         }
         size = strlen(string);
-        for (size_t i = 1; i < cvector_size((int *)rx->data); ++i) {
+        for (size_t i = 1; i < cvector_size(integers); ++i) {
           if (capacity - size < len + strlen(sep)) {
             if ((string = realloc(string, capacity *= 2))) {
               memset(string + capacity / 2, 0, capacity);
@@ -254,10 +307,10 @@ char *rexp_to_string(REXP *rx, char *sep)
             }
           }
           strcat(string, sep);
-          if (NA_INTERNAL == *((int *)rx->data + i)) {
+          if (NA_INTERNAL == integers[i]) {
             snprintf(string + strlen(string), len, "%s", "NA");
           } else {
-            snprintf(string + strlen(string), len, "%d", *((int *)rx->data + i));
+            snprintf(string + strlen(string), len, "%d", integers[i]);
           }
           size = strlen(string);
         }
@@ -266,15 +319,16 @@ char *rexp_to_string(REXP *rx, char *sep)
 
     case XT_LOGICAL: case XT_ARRAY_BOOL:
       if (string) {
-        if (TRUE == *(char *)rx->data) {
+        cvector(char) logicals = rx->data;
+        if (TRUE == logicals[0]) {
           snprintf(string, len, "%s", "TRUE");
-        } else if (FALSE == *(char *)rx->data) {
+        } else if (FALSE == logicals[0]) {
           snprintf(string, len, "%s", "FALSE");
         } else {
           snprintf(string, len, "%s", "NA");
         }
         size = strlen(string);
-        for (size_t i = 1; i < cvector_size((char *)rx->data); ++i) {
+        for (size_t i = 1; i < cvector_size(logicals); ++i) {
           if (capacity - size < len + strlen(sep)) {
             if ((string = realloc(string, capacity *= 2))) {
               memset(string + capacity / 2, 0, capacity);
@@ -283,9 +337,9 @@ char *rexp_to_string(REXP *rx, char *sep)
             }
           }
           strcat(string, sep);
-          if (TRUE == *((char *)rx->data + i)) {
+          if (TRUE == logicals[i]) {
             snprintf(string + strlen(string), len, "%s", "TRUE");
-          } else if (FALSE == *((char *)rx->data + i)) {
+          } else if (FALSE == logicals[i]) {
             snprintf(string + strlen(string), len, "%s", "FALSE");
           } else {
             snprintf(string + strlen(string), len, "%s", "NA");
@@ -297,7 +351,8 @@ char *rexp_to_string(REXP *rx, char *sep)
 
     case XT_RAW:
       if (string) {
-        snprintf(string, len, "%x", *(char *)rx->data);
+        char *raw = rx->data;
+        snprintf(string, len, "%x", raw[0]);
         size = strlen(string);
         for (size_t i = 1; i < cvector_size((char *)rx->data); ++i) {
           if (capacity - size < len + strlen(sep)) {
@@ -308,7 +363,27 @@ char *rexp_to_string(REXP *rx, char *sep)
             }
           }
           strcat(string, sep);
-          snprintf(string + strlen(string), len, "%x", *((char *)rx->data + i));
+          snprintf(string + strlen(string), len, "%x", raw[i]);
+          size = strlen(string);
+        }
+      }
+      break;
+
+    case XT_STR: case XT_ARRAY_STR:
+      if (string) {
+        cvector(char *) strings = rx->data;
+        snprintf(string, len, "%s", strings[0][0] ? strings[0] : "NA");
+        size = strlen(string);
+        for (size_t i = 1; i < cvector_size(strings); ++i) {
+          if (capacity - size < len + strlen(sep)) {
+            if ((string = realloc(string, capacity *= 2))) {
+              memset(string + capacity / 2, 0, capacity);
+            } else {
+              break;
+            }
+          }
+          strcat(string, sep);
+          snprintf(string + strlen(string), len, "%s", strings[i][0] ? strings[i] : "NA");
           size = strlen(string);
         }
       }
