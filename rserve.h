@@ -46,16 +46,15 @@ typedef enum {
 } RsrvServerError;
 
 typedef enum {
-  LOGIN         = 0x001,
-  VOIDEVAL      = 0x002,
-  EVAL          = 0x003,
-  SHUTDOWN      = 0x004,
-  OCCALL        = 0x00f,
-  OCINIT        = 0x434f7352,
-  SETSEXP       = 0x020,
-  ASSIGNSEXP    = 0x021,
-  SETBUFFERSIZE = 0x081,
-  SETENCODING   = 0x082,
+  CMD_LOGIN         = 0x001,
+  CMD_VOIDEVAL      = 0x002,
+  CMD_EVAL          = 0x003,
+  CMD_SHUTDOWN      = 0x004,
+  CMD_OCCALL        = 0x00f,
+  CMD_SETSEXP       = 0x020,
+  CMD_ASSIGNSEXP    = 0x021,
+  CMD_SETBUFFERSIZE = 0x081,
+  CMD_SETENCODING   = 0x082,
 } RsrvCmd;
 
 #define RESP_CMD 0x10000
@@ -70,13 +69,17 @@ typedef struct {
   bool auth_req;
   bool plaintext;
   int rsrv_ver;
+  bool is_ocap;
+  REXP *capabilities; //FIXME: Where to free?
 } RConnection;
 
 int rserve_connect(RConnection *conn, char *host, int port);
 int rserve_disconnect(RConnection* conn);
 int rserve_login(RConnection *conn, char *user, char *pwd);
 int rserve_eval(RConnection *conn, char *cmd, REXP *rx);
+int rserve_callocap(RConnection *conn, REXP *x, REXP *rx);
 //int rserve_assign()
+//int rserve_assignrexp()
 //int rserve_shutdown()
 const char *rserve_error(int err);
 

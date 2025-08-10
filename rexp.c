@@ -369,6 +369,7 @@ char *rexp_to_string(REXP *rx, char *sep)
       }
       break;
 
+    //FIXME: improve to handle arbitrarily long strings
     case XT_STR: case XT_ARRAY_STR:
       if (string) {
         cvector(char *) strings = rx->data;

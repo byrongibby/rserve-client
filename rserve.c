@@ -141,134 +141,6 @@ char *rpacket_to_str(char *s, size_t n, RPacket *rp)
 
 /* Rserve client interface */
 
-int rserve_connect(RConnection *conn, char *host, int port)
-{
-  assert(strlen(host) > 0);
-  assert(port > 0);
-
-  const int attrlen = 4;
-	int ret, n = 0;
-	char ids[32], attr[5] = { 0 };
-	struct sockaddr_in serv_addr;
-
-  conn->host = host;
-  conn->port = port;
-  conn->sockfd = -1;
-  conn->connected = false;
-  conn->auth_req = false;
-  conn->plaintext = false;
-  conn->rsrv_ver = 0;
-
-  errno = 0;
-
-	if ((conn->sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    fprintf(stderr, "ERROR: creating socket: %s\n", strerror(errno));
-		return CONN_ERR;
-	}
-
-	memset(&serv_addr, 0, sizeof(serv_addr));
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(conn->port);
-
-	if ((ret = inet_pton(AF_INET, conn->host, &serv_addr.sin_addr)) < 0) {
-    fprintf(stderr, "ERROR: invalid address family: %s\n", strerror(errno));
-		return CONN_ERR;
-	} else if (ret == 0) {
-    fprintf(stderr, "ERROR: host string not valid\n");
-		return CONN_ERR;
-  }
-
-	if (connect(conn->sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-    fprintf(stderr, "ERROR: connecting socket: %s\n", strerror(errno));
-		return CONN_ERR;
-	} else {
-    conn->connected = true;
-  }
-
-	memset(ids, 0, sizeof(ids));
-
-	if ((n = read(conn->sockfd, ids, sizeof(ids))) < 0) {
-    fprintf(stderr, "ERROR: reading from socket: %s\n", strerror(errno));
-    rserve_disconnect(conn);
-    return CONN_ERR;
-	}
-
-  if (n != 32) {
-    fprintf(stderr, "ERROR: handshake failed: expected 32 bytes header\n");
-    rserve_disconnect(conn);
-    return HSHK_FAILED;
-  }
-
-  memcpy(attr, ids, attrlen);
-
-  if (n >= 16 && strcmp(attr, "RsOC") == 0) {
-    fprintf(stderr, "ERROR: handshake failed: OCAP mode not supported\n");
-    rserve_disconnect(conn);
-    return HSHK_FAILED;
-  }
-  
-  if (strcmp(attr, "Rsrv") != 0) {
-    fprintf(stderr, "ERROR: handshake failed: Rsrv signature expected\n");
-    rserve_disconnect(conn);
-    return HSHK_FAILED;
-  }
-
-  memcpy(attr, ids + 4, attrlen);
-  conn->rsrv_ver = atoi(attr);
-
-  if (conn->rsrv_ver != 103) {
-    fprintf(stderr, "ERROR: handshake failed: client/server protocol mismatch\n");
-    rserve_disconnect(conn);
-    return HSHK_FAILED;
-  }
-
-  memcpy(attr, ids + 8, attrlen);
-
-  if (strcmp(attr, "QAP1") != 0) {
-    fprintf(stderr, "ERROR: handshake failed: unupported transfer protocol\n");
-    rserve_disconnect(conn);
-    return HSHK_FAILED;
-  }
-
-  for (int i = 12; i < 32; i += 4) {
-    memcpy(attr, ids + i, attrlen);
-    if (strcmp(attr, "ARpt") == 0) {
-      conn->auth_req = true;
-      conn->plaintext = true;
-    }
-    if (strcmp(attr, "ARuc") == 0) {
-      conn->auth_req = true;
-    }
-  }
-
-  if (conn->auth_req && !conn->plaintext) {
-    fprintf(stderr, "WARN: encrypted auth not supported\n");
-  }
-
-  fprintf(stderr, "INFO: successfully connected to Rserve\n");
-
-  return 0;
-}
-
-int rserve_disconnect(RConnection* conn)
-{
-  assert(conn != NULL);
-
-  int ret;
-
-  fprintf(stderr, "INFO: disconnecting from server\n");
-
-  conn->connected = false;
-  errno = 0;
-
-  if ((ret = shutdown(conn->sockfd, 2)) != 0 ) {
-    fprintf(stderr, "ERROR: while disconnecting: %s\n", strerror(errno));
-    return ret;
-  }
-
-  return 0;
-}
-
 typedef struct
 {
   char *data;
@@ -393,41 +265,18 @@ int request_string(RConnection *conn, int cmd, char* x, RPacket *rp)
   return request_bytes(conn, cmd, cont, cont->size, rp);
 }
 
-/* RPacket *request_rexp(RConnection *conn, int cmd, REXPContainer x); */
-/* RPacket *request_int(RConnection *conn, int cmd, int x); */
-
-int rserve_login(RConnection *conn, char *user, char *pwd)
+int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
 {
-  char cred[strlen(user) + strlen(pwd) + 2];
-  RPacket rp = { 0, 0, NULL };
+  int rl = rexp_binlen(rx);
 
-  if (!conn->connected) {
-    fprintf(stderr, "ERROR: Login failed: Not connected\n");
-    return CONN_ERR;
-  }
+  char *rxbin = rexp_to_binary(rx), rq[rl + ((rl > 0xfffff0) ? 8 : 4)];
+	memset(rq, 0, sizeof(rq));
+  memcpy(rq + ((rl > 0xfffff0) ? 8 : 4), rxbin, rl);
 
-  if (!conn->auth_req) return 0;
-
-	memset(&cred, 0, sizeof(cred));
-
-  strcat(cred, user);
-  strcat(cred, "\n");
-  strcat(cred, pwd);
-
-  request_string(conn, LOGIN, cred, &rp);
-
-  if (!rpacket_is_ok(&rp)) {
-    int ret = rpacket_get_status(&rp);
-    rpacket_clear(&rp);
-    fprintf(stderr, "ERROR: Login failed: Unable to process server response\n");
-    return ret;
-  }
-
-  rpacket_clear(&rp);
-
-  fprintf(stderr, "INFO: Login success: Logged in to Rserve\n");
-
-  return 0;
+  set_hdr(DT_SEXP, rl, rq, 0);
+  Buffer *cont = &(Buffer) { .data = rq, .size = sizeof(rq) };
+  
+  return request_bytes(conn, cmd, cont, cont->size, rp);
 }
 
 int parse_response(RPacket *rp, REXP *rx)
@@ -451,7 +300,200 @@ int parse_response(RPacket *rp, REXP *rx)
   return 0;
 }
 
-int rserve_eval(RConnection *conn, char *cmd, REXP *rx)
+int init_ocap(RConnection *conn, Buffer *hdr)
+{
+  /* there is no version in OCAP but 103 is assumed since that is
+	 * the earliest version that supports OCAPs
+   * */
+  conn->rsrv_ver = 103;
+  conn->is_ocap = true;
+  conn->connected = true;
+
+  int ret = 0;
+  RPacket rp = { 0, 0, NULL };
+
+  if ((ret = response_hdr(conn, hdr, &rp)) != 0) return ret;
+  if ((ret = parse_response(&rp, conn->capabilities)) != 0) return ret;
+
+  rpacket_clear(&rp);
+
+  fprintf(stderr, "INFO: successfully initialised OCAP\n");
+
+  return ret;
+}
+
+int rserve_connect(RConnection *conn, char *host, int port)
+{
+  assert(strlen(host) > 0);
+  assert(port > 0);
+
+  const int attrlen = 4;
+	int ret, n = 0;
+	char ids[32] = { 0 }, attr[5] = { 0 };
+	struct sockaddr_in serv_addr;
+
+  conn->host = host;
+  conn->port = port;
+  conn->sockfd = -1;
+  conn->connected = false;
+  conn->auth_req = false;
+  conn->plaintext = false;
+  conn->is_ocap = false;
+  conn->rsrv_ver = 0;
+  conn->capabilities = NULL;
+
+  errno = 0;
+
+	if ((conn->sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    fprintf(stderr, "ERROR: creating socket: %s\n", strerror(errno));
+		return CONN_ERR;
+	}
+
+	memset(&serv_addr, 0, sizeof(serv_addr));
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(conn->port);
+
+	if ((ret = inet_pton(AF_INET, conn->host, &serv_addr.sin_addr)) < 0) {
+    fprintf(stderr, "ERROR: invalid address family: %s\n", strerror(errno));
+		return CONN_ERR;
+	} else if (ret == 0) {
+    fprintf(stderr, "ERROR: host string not valid\n");
+		return CONN_ERR;
+  }
+
+	if (connect(conn->sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+    fprintf(stderr, "ERROR: connecting socket: %s\n", strerror(errno));
+		return CONN_ERR;
+	} else {
+    conn->connected = true;
+  }
+
+	if ((n = read(conn->sockfd, ids, sizeof(ids))) < 0) {
+    fprintf(stderr, "ERROR: reading from socket: %s\n", strerror(errno));
+    rserve_disconnect(conn);
+    return CONN_ERR;
+	}
+
+  memcpy(attr, ids, attrlen);
+
+  if (n >= 16 && strcmp(attr, "RsOC") == 0) {
+    Buffer header = { .data = NULL, .size = n};
+    /* it is possible that the buffering doesn't work out
+     * and the first packet is < 32 bytes, in which case
+     * we have to re-wrap the array to have the correct length
+     * */
+    if (n < 32) {
+      char data[n];
+      memcpy(data, ids, n);
+      header.data = data;
+    } else {
+      header.data = ids;
+    }
+    return init_ocap(conn, &header); //FIXME: What about atuh below?
+  }
+  
+  if (n != 32) {
+    fprintf(stderr, "ERROR: handshake failed: expected 32 bytes header\n");
+    rserve_disconnect(conn);
+    return HSHK_FAILED;
+  }
+
+  if (strcmp(attr, "Rsrv") != 0) {
+    fprintf(stderr, "ERROR: handshake failed: Rsrv signature expected\n");
+    rserve_disconnect(conn);
+    return HSHK_FAILED;
+  }
+
+  memcpy(attr, ids + 4, attrlen);
+  conn->rsrv_ver = atoi(attr);
+
+  if (conn->rsrv_ver != 103) {
+    fprintf(stderr, "ERROR: handshake failed: client/server protocol mismatch\n");
+    rserve_disconnect(conn);
+    return HSHK_FAILED;
+  }
+
+  memcpy(attr, ids + 8, attrlen);
+
+  if (strcmp(attr, "QAP1") != 0) {
+    fprintf(stderr, "ERROR: handshake failed: unupported transfer protocol\n");
+    rserve_disconnect(conn);
+    return HSHK_FAILED;
+  }
+
+  for (int i = 12; i < 32; i += 4) {
+    memcpy(attr, ids + i, attrlen);
+    if (strcmp(attr, "ARpt") == 0) {
+      conn->auth_req = true;
+      conn->plaintext = true;
+    }
+    if (strcmp(attr, "ARuc") == 0) {
+      conn->auth_req = true;
+    }
+  }
+
+  if (conn->auth_req && !conn->plaintext) {
+    fprintf(stderr, "WARN: encrypted auth not supported\n");
+  }
+
+  fprintf(stderr, "INFO: successfully connected to Rserve\n");
+
+  return 0;
+}
+
+int rserve_disconnect(RConnection* conn)
+{
+  assert(conn != NULL);
+
+  int ret = 0;
+
+  fprintf(stderr, "INFO: disconnecting from server\n");
+
+  conn->connected = false;
+  errno = 0; //FIXME: check errno?
+
+  if ((ret = shutdown(conn->sockfd, 2)) != 0 ) {
+    fprintf(stderr, "ERROR: while disconnecting: %s\n", strerror(errno));
+  }
+
+  return ret;
+}
+
+int rserve_login(RConnection *conn, char *user, char *pwd)
+{
+  char cred[strlen(user) + strlen(pwd) + 2];
+  RPacket rp = { 0, 0, NULL };
+
+  if (!conn->connected) {
+    fprintf(stderr, "ERROR: Login failed: Not connected\n");
+    return CONN_ERR;
+  }
+
+  if (!conn->auth_req) return 0;
+
+	memset(&cred, 0, sizeof(cred));
+
+  strcat(cred, user);
+  strcat(cred, "\n");
+  strcat(cred, pwd);
+
+  request_string(conn, CMD_LOGIN, cred, &rp);
+
+  if (!rpacket_is_ok(&rp)) {
+    int ret = rpacket_get_status(&rp);
+    rpacket_clear(&rp);
+    fprintf(stderr, "ERROR: Login failed: Unable to process server response\n");
+    return ret;
+  }
+
+  rpacket_clear(&rp);
+
+  fprintf(stderr, "INFO: Login success: Logged in to Rserve\n");
+
+  return 0;
+}
+
+int rserve_eval(RConnection *conn, char *x, REXP *rx)
 {
   assert(conn != NULL);
   assert(conn->connected);
@@ -462,10 +504,45 @@ int rserve_eval(RConnection *conn, char *cmd, REXP *rx)
     return DISCONNECTED;
   }
 
-  int ret;
-  RPacket rp; 
+  int ret = 0;
+  RPacket rp = { 0, 0, NULL }; 
 
-  if ((ret = request_string(conn, EVAL, cmd, &rp)) != 0) {
+  if ((ret = request_string(conn, CMD_EVAL, x, &rp)) != 0) {
+    rpacket_clear(&rp);
+    fprintf(stderr, "ERROR: during eval, request failed\n");
+    return ret;
+  }
+
+  if (!rpacket_is_ok(&rp)) {
+    ret = rpacket_get_status(&rp);
+    fprintf(stderr, "ERROR: during eval, server returned error\n");
+    rpacket_clear(&rp);
+    return ret;
+  }
+
+  if ((ret = parse_response(&rp, rx)) != 0) {
+    rpacket_clear(&rp);
+    fprintf(stderr, "ERROR: during eval, unable to parse response\n");
+    return ret;
+  }
+
+  rpacket_clear(&rp);
+
+  return ret;
+}
+
+
+int rserve_callocap(RConnection *conn, REXP *x, REXP *rx)
+{
+  assert(conn);
+  assert(rx);
+  assert(conn->connected);
+  assert(conn->is_ocap);
+
+  int ret = 0;
+  RPacket rp = { 0, 0, NULL }; 
+
+  if ((ret = request_rexp(conn, CMD_OCCALL, x, &rp)) != 0) {
     rpacket_clear(&rp);
     fprintf(stderr, "ERROR: during eval, request failed\n");
     return ret;
