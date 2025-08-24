@@ -265,6 +265,7 @@ int request_string(RConnection *conn, int cmd, char* x, RPacket *rp)
   return request_bytes(conn, cmd, cont, cont->size, rp);
 }
 
+/*
 int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
 {
   int rl = rexp_binlen(rx);
@@ -278,6 +279,7 @@ int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
   
   return request_bytes(conn, cmd, cont, cont->size, rp);
 }
+*/
 
 int parse_response(RPacket *rp, REXP *rx)
 {
@@ -531,7 +533,7 @@ int rserve_eval(RConnection *conn, char *x, REXP *rx)
   return ret;
 }
 
-
+/*
 int rserve_callocap(RConnection *conn, REXP *x, REXP *rx)
 {
   assert(conn);
@@ -565,6 +567,7 @@ int rserve_callocap(RConnection *conn, REXP *x, REXP *rx)
 
   return ret;
 }
+*/
 
 /*
 int rserve_assign()

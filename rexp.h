@@ -28,7 +28,7 @@ typedef enum
   //XT_VECTOR        = 16,
   //XT_LIST          = 17,
   //XT_CLOS          = 18,
-  //XT_SYMNAME       = 19,
+  XT_SYMNAME       = 19,
   //XT_LIST_NOTAG    = 20,
   //XT_LIST_TAG      = 21,
   //XT_LANG_NOTAG    = 22,

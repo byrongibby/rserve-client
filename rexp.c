@@ -16,6 +16,7 @@ extern void set_long(int64_t x, char* y, size_t o);
 extern long get_long(char* y, size_t o);
 
 
+/* Custom destructor for vector of string */
 static void free_string(void *str) {
   if (str) {
     free(*(char **)str);
@@ -52,7 +53,9 @@ void rexp_clear(REXP *rx)
     case XT_STR: case XT_ARRAY_STR:
       cvector_free((char **)rx->data);
       break;
-   case XT_NULL:
+    case XT_SYMNAME:
+      free((char *)rx->data);
+    case XT_NULL:
       break;
   }
 }
@@ -74,6 +77,8 @@ bool rexp_is_symbol(REXP *rx)
       return false;
     case XT_STR: case XT_ARRAY_STR:
       return false;
+    case XT_SYMNAME:
+      return true;
     default:
       return false;
   }
@@ -96,6 +101,8 @@ bool rexp_is_vector(REXP *rx)
       return true;
     case XT_STR: case XT_ARRAY_STR:
       return true;
+    case XT_SYMNAME:
+      return false;
     default:
       return false;
   }
@@ -117,6 +124,8 @@ bool rexp_is_list(REXP *rx)
     case XT_RAW:
       return false;
     case XT_STR: case XT_ARRAY_STR:
+      return false;
+    case XT_SYMNAME:
       return false;
     default:
       return false;
@@ -244,12 +253,11 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       rxo = eox;
       break;
 
-      /*
   case XT_SYMNAME:
     for(i = rxo; buf[i] != 0 && i < eox; i++);
+    rx->data = calloc(i + 1, sizeof(char));
+    memcpy(rx->data, buf + rxo, i);
     break;
-    */
-
   }
 
   return rxo;
@@ -261,15 +269,19 @@ char *rexp_to_string(REXP *rx, char *sep)
   assert(sep);
 
   size_t seplen = strlen(sep), len = 100 + seplen, capacity = 10 * len, size = 0;
-  char *string = calloc(capacity, sizeof(char));
+  char *string;
 
   switch(rx->type) {
     case XT_NULL:
-      snprintf(string, len, "%s", "NULL");
-      size = strlen(string);
+      string = calloc(capacity, sizeof(char));
+      if (string) {
+        snprintf(string, len, "%s", "NULL");
+        size = strlen(string);
+      }
       break;
 
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
+      string = calloc(capacity, sizeof(char));
       if (string) {
         cvector(double) doubles = rx->data;
         snprintf(string, len, "%f", doubles[0]);
@@ -290,6 +302,7 @@ char *rexp_to_string(REXP *rx, char *sep)
       break;
 
     case XT_INT: case XT_ARRAY_INT:
+      string = calloc(capacity, sizeof(char));
       if (string) {
         cvector(int) integers = rx->data;
         if (NA_INTERNAL == integers[0]) {
@@ -318,6 +331,7 @@ char *rexp_to_string(REXP *rx, char *sep)
       break;
 
     case XT_LOGICAL: case XT_ARRAY_BOOL:
+      string = calloc(capacity, sizeof(char));
       if (string) {
         cvector(char) logicals = rx->data;
         if (TRUE == logicals[0]) {
@@ -350,6 +364,7 @@ char *rexp_to_string(REXP *rx, char *sep)
       break;
 
     case XT_RAW:
+      string = calloc(capacity, sizeof(char));
       if (string) {
         char *raw = rx->data;
         snprintf(string, len, "%x", raw[0]);
@@ -371,6 +386,7 @@ char *rexp_to_string(REXP *rx, char *sep)
 
     //FIXME: improve to handle arbitrarily long strings
     case XT_STR: case XT_ARRAY_STR:
+      string = calloc(capacity, sizeof(char));
       if (string) {
         cvector(char *) strings = rx->data;
         snprintf(string, len, "%s", strings[0][0] ? strings[0] : "NA");
@@ -387,6 +403,13 @@ char *rexp_to_string(REXP *rx, char *sep)
           snprintf(string + strlen(string), len, "%s", strings[i][0] ? strings[i] : "NA");
           size = strlen(string);
         }
+      }
+      break;
+
+    case XT_SYMNAME:
+      string = calloc(strlen((char*)rx->data) + 1, sizeof(char));
+      if (string) {
+        memcpy(string, rx->data, strlen((char*)rx->data) + 1);
       }
       break;
   }
