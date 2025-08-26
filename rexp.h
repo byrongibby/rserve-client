@@ -61,6 +61,8 @@ bool rexp_is_vector(REXP *rx);
 bool rexp_is_list(REXP *rx);
 char *rexp_to_string(REXP *rx, char *sep);
 void rexp_print(REXP *rx);
+int rexp_binlen(REXP *rx);
+int rexp_to_binary(REXP *rx, char *buf, int rxo);
 int rexp_parse(REXP *rx, char *buf, int rxo);
 
 #endif // REXP_H_

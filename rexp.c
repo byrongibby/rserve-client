@@ -590,3 +590,68 @@ void rexp_print(REXP *rx)
   puts(s);
   free(s);
 }
+
+
+int rexp_binlen(REXP *rx)
+{
+  int len = 0;
+  if (rx->attr) len += rexp_binlen(rx->attr);
+  switch(rx->type) {
+    case XT_NULL:
+      break;
+    case XT_SYMNAME:
+      len += rx->data ? strlen((char *)rx->data) + 1 : 1;
+      if ((len & 3) > 0) len = len - (len & 3) + 4;
+      break;
+    case XT_INT: case XT_ARRAY_INT:
+      len += cvector_size((int *)rx->data) * 4;
+      break;
+    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
+      len += cvector_size((double *)rx->data) * 8;
+      break;
+    case XT_LOGICAL: case XT_ARRAY_BOOL:
+      len += cvector_size((char *)rx->data) + 4;
+      if ((len & 3) > 0) len = len - (len & 3) + 4;
+      break;
+    case XT_RAW:
+      len += cvector_size((char *)rx->data) + 4;
+      if ((len & 3) > 0) len = len - (len & 3) + 4;
+      break;
+    case XT_STR: case XT_ARRAY_STR:
+      for (size_t i = 0; i < cvector_size((char **)rx->data); ++i) {
+        if(strlen(((char **)rx->data)[i]) > 0) {
+          if (((char **)rx->data)[i][0] == -1) len++;
+          len += strlen(((char **)rx->data)[i]); //FIXME: Need to  + 1 ??
+        }
+      }
+      if ((len & 3) > 0) len = len - (len & 3) + 4;
+      break;
+    case XT_LIST_NOTAG: case XT_LIST_TAG: case XT_VECTOR:
+      break;
+  }
+  return len;
+}
+
+int rexp_to_binary(REXP *rx, char *buf, int rxo) 
+{
+  buf++;
+  switch(rx->type) {
+    case XT_NULL:
+      break;
+    case XT_SYMNAME:
+      break;
+    case XT_INT: case XT_ARRAY_INT:
+      break;
+    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
+      break;
+    case XT_STR: case XT_ARRAY_STR:
+      break;
+    case XT_LOGICAL: case XT_ARRAY_BOOL:
+      break;
+    case XT_RAW:
+      break;
+    case XT_LIST_NOTAG: case XT_LIST_TAG: case XT_VECTOR:
+      break;
+  }
+  return rxo;
+}

@@ -265,21 +265,28 @@ int request_string(RConnection *conn, int cmd, char* x, RPacket *rp)
   return request_bytes(conn, cmd, cont, cont->size, rp);
 }
 
-/*
 int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
 {
-  int rl = rexp_binlen(rx);
+  int rl;
 
-  char *rxbin = rexp_to_binary(rx), rq[rl + ((rl > 0xfffff0) ? 8 : 4)];
+  if ((rl = rexp_binlen(rx)) < 0) {
+    fprintf(stderr, "ERROR: while serialising, failed to get binary length\n");
+    return SERIAL_ERR;
+  }
+
+  char rq[rl + ((rl > 0xfffff0) ? 8 : 4)];
+
 	memset(rq, 0, sizeof(rq));
-  memcpy(rq + ((rl > 0xfffff0) ? 8 : 4), rxbin, rl);
-
   set_hdr(DT_SEXP, rl, rq, 0);
+  if (rexp_to_binary(rx, rq,  (rl > 0xfffff0) ? 8 : 4) != 0) {
+    fprintf(stderr, "ERROR: while serialising, failed to get binary representation\n");
+    return SERIAL_ERR;
+  }
+
   Buffer *cont = &(Buffer) { .data = rq, .size = sizeof(rq) };
   
   return request_bytes(conn, cmd, cont, cont->size, rp);
 }
-*/
 
 int parse_response(RPacket *rp, REXP *rx)
 {
@@ -389,7 +396,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
     } else {
       header.data = ids;
     }
-    return init_ocap(conn, &header); //FIXME: What about atuh below?
+    return init_ocap(conn, &header); //FIXME: What about auth below?
   }
   
   if (n != 32) {
@@ -531,7 +538,6 @@ int rserve_eval(RConnection *conn, char *x, REXP *rx)
   return ret;
 }
 
-/*
 int rserve_callocap(RConnection *conn, REXP *x, REXP *rx)
 {
   assert(conn);
@@ -544,13 +550,13 @@ int rserve_callocap(RConnection *conn, REXP *x, REXP *rx)
 
   if ((ret = request_rexp(conn, CMD_OCCALL, x, &rp)) != 0) {
     rpacket_clear(&rp);
-    fprintf(stderr, "ERROR: during eval, request failed\n");
+    fprintf(stderr, "ERROR: during callocap, request failed\n");
     return ret;
   }
 
   if (!rpacket_is_ok(&rp)) {
     ret = rpacket_get_status(&rp);
-    fprintf(stderr, "ERROR: during eval, server returned error\n");
+    fprintf(stderr, "ERROR: during callocap server returned error\n");
     rpacket_clear(&rp);
     return ret;
   }
@@ -565,7 +571,6 @@ int rserve_callocap(RConnection *conn, REXP *x, REXP *rx)
 
   return ret;
 }
-*/
 
 /*
 int rserve_assign()

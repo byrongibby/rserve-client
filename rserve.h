@@ -15,11 +15,12 @@ typedef enum {
 } RsrvDataType;
 
 typedef enum {
-  CONN_ERR        = 0x30,
-  HSHK_FAILED     = 0x31,
-  DISCONNECTED    = 0x32,
-  READ_ERR        = 0x33,
-  PARSE_ERR       = 0x34,
+  CONN_ERR     = 0x30,
+  HSHK_FAILED  = 0x31,
+  DISCONNECTED = 0x32,
+  READ_ERR     = 0x33,
+  PARSE_ERR    = 0x34,
+  SERIAL_ERR   = 0x35,
 } RsrvClientError;
 
 typedef enum {
