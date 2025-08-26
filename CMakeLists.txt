@@ -9,8 +9,8 @@ project(rserve-client)
 ## LIBRARY
 ###########################################################
 
-add_library(rserve-client SHARED rserve.c rexp.c)
-add_library(rserve-client-static STATIC rserve.c rexp.c)
+add_library(rserve-client SHARED rserve.c rexp.c rlist.c)
+add_library(rserve-client-static STATIC rserve.c rexp.c rlist.c)
 
 ###########################################################
 ## EXECUTABLES

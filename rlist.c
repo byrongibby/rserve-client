@@ -2,136 +2,156 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "rexp_vector.h"
+#include "cvector.h"
 #include "rlist.h"
 #include "strings.h"
 
-int rlist_setup(RList* rl, size_t capacity, bool has_names)
-{
-  Vector v = { NULL, NULL };
-
-  rl->names = v;
-  rl->values = v;
-
-  if (has_names && (strings_vector_setup(&rl->names, capacity) != 0)) {
-    return VECTOR_ERROR;
-  } 
-
-  return rexp_vector_setup(&rl->values, capacity);
+/* Custom destructor for vector of string */
+static void free_string(void *str) {
+  if (str) {
+    free(*(char **)str);
+  }
 }
 
-void rlist_destroy(RList* rl) {
-  if (vector_is_initialized(&rl->names)) vector_destroy(&rl->names);
-  if (vector_is_initialized(&rl->values)) vector_destroy(&rl->values);
+int rlist_init(RList* rl, size_t capacity, bool has_names)
+{
+  assert(rl);
+
+  rl->names = NULL;
+  rl->values = NULL;
+
+  if (has_names) {
+    cvector_init(rl->names, capacity, free_string);
+    if (cvector_capacity(rl->names) != capacity) return RLIST_ERROR;
+  } 
+
+  cvector_reserve(rl->values, capacity);
+
+  return cvector_capacity(rl->values) == capacity ? RLIST_SUCCESS : RLIST_ERROR;
+}
+
+void rlist_free(RList* rl) {
+  assert(rl);
+
+  if (rl->names) cvector_free(rl->names);
+  if (rl->values) cvector_free(rl->values);
 }
 
 bool rlist_has_names(RList* rl)
 {
-  return vector_is_initialized(&rl->names);
+  assert(rl);
+
+  return rl->names != NULL;
 }
 
 size_t rlist_size(RList* rl)
 {
-  return vector_size(&rl->values);
+  assert(rl);
+
+  return cvector_size(rl->values);
 }
 
-int index_of_name_(RList* rl, char* name)
+static int index_of_name_(RList* rl, char* name)
 {
-  Iterator iterator, last;
+  assert(rl);
+  assert(name);
 
-  if(rl == NULL) return VECTOR_ERROR;
+  char **it;
 
-  if (vector_is_initialized(&rl->names)) {
-    iterator = vector_begin(&rl->names); 
-    last = vector_end(&rl->names); 
-    for (; !iterator_equals(&iterator, &last); iterator_increment(&iterator)) {
-      if (strcmp(*(char **)iterator_get(&iterator), name) == 0) {
-        return iterator_index(&rl->names, &iterator);
+  if (rl->names) {
+    for (it = cvector_begin(rl->names); it != cvector_end(rl->names); ++it) {
+      if (strcmp(*it, name) == 0) {
+        return (it - rl->names) / sizeof(char **);
       }
     }
   }
 
-  return VECTOR_ERROR;
+  return RLIST_ERROR;
 }
 
-int rlist_add(RList* rl, REXP *value)
+int rlist_add(RList* rl, REXP value)
 {
-  char *name = NULL;
+  assert(rl);
 
-  if(rl == NULL) return VECTOR_ERROR;
+  size_t size;
 
-  if (vector_is_initialized(&rl->names) &&
-      (vector_push_back(&rl->names, &name) != 0)) {
-    return VECTOR_ERROR;
+  if (rl->names) {
+    size = cvector_size(rl->names);
+    cvector_push_back(rl->names, NULL);
+    if (cvector_size(rl->names) != size + 1) return RLIST_ERROR;
   }
 
-  return vector_push_back(&rl->values, value);
+  size = cvector_size(rl->values);
+  cvector_push_back(rl->values, value);
+  return cvector_size(rl->values) == size + 1 ? RLIST_SUCCESS : RLIST_ERROR;
 }
 
-int rlist_put(RList* rl, char* name, REXP *value)
+int rlist_put(RList* rl, char *name, REXP value)
 {
-  char *empty_name = NULL;
+  assert(rl);
 
-  if(rl == NULL) return VECTOR_ERROR;
+  int ret;
 
+  // Name is NULL
   if (name == NULL) {
     return rlist_add(rl, value);
   }
 
-  if (vector_is_initialized(&rl->names)) {
+  // Name already exists in list
+  if (rl->names) {
     int i = index_of_name_(rl, name);
     if (i >= 0) {
-      return vector_assign(&rl->values, i, value);
+      rl->values[i] = value;
+      return RLIST_SUCCESS;
     }
   }
 
-  rlist_add(rl, value);
-
-  if (!vector_is_initialized(&rl->names)) {
-    strings_vector_setup(&rl->names, vector_capacity(&rl->values));
-    while (vector_size(&rl->names) < vector_size(&rl->values)) {
-      vector_push_back(&rl->names, &empty_name);
-    }
-  }
-
-  return vector_assign(&rl->names, vector_size(&rl->names) - 1, &name);
+  // Name added to the end of the list
+  if ((ret = rlist_add(rl, value)) != 0) return ret;
+  if (!rl->names)
+    cvector_init(rl->names, cvector_capacity(rl->values), free_string);
+  rl->names[cvector_size(rl->names) - 1] = name;
+  return ret;
 }
 
 int rlist_assign_name(RList *rl, size_t index, char *name)
 {
-  if(rl == NULL) return VECTOR_ERROR;
+  assert(rl);
 
-  if (!vector_is_initialized(&rl->names)) {
-    strings_vector_setup(&rl->names, vector_capacity(&rl->values));
-    vector_resize(&rl->names, vector_size(&rl->values));
+  if (!rl->names) {
+    cvector_init(rl->names, cvector_capacity(rl->values), free_string);
+    cvector_resize(rl->names, cvector_size(rl->values), NULL);
   }
-  return vector_insert(&rl->names, index, &name);
+
+  cvector_insert(rl->names, index, name);
+
+  return rl->names[index] == name ? RLIST_SUCCESS : RLIST_ERROR;
 }
 
 REXP *rlist_get(RList* rl, char* name)
 {
-  if(rl == NULL) return NULL;
+  assert(rl);
 
-  if (vector_is_initialized(&rl->names)) {
+  if (rl->names) {
     int i = index_of_name_(rl, name);
-    if (i >= 0) return vector_get(&rl->values, i);
+    if (i >= 0) return cvector_at(rl->values, i);
   }
+
   return NULL;
 }
 
 REXP *rlist_at(RList* rl, size_t index)
 {
-  if(rl == NULL) return NULL;
+  assert(rl);
 
-  return vector_get(&rl->values, index);
+  return cvector_at(rl->values, index);
 }
 
 char *rlist_name_at(RList* rl, size_t index)
 {
-  if(rl == NULL) return NULL;
+  assert(rl);
 
-  if (vector_is_initialized(&rl->names)) {
-    return *(char **)vector_get(&rl->names, index);
-  } else {
-    return NULL;
-  }
+  if (rl->names) return rl->names[index];
+
+  return NULL;
+}

@@ -7,6 +7,7 @@
 
 #include "cvector.h"
 #include "rexp.h"
+#include "rlist.h"
 #include "rserve.h"
 
 extern int get_len(char* y, size_t o);
@@ -55,9 +56,18 @@ void rexp_clear(REXP *rx)
       break;
     case XT_SYMNAME:
       free((char *)rx->data);
+      break;
+    case XT_LIST_TAG: case XT_LIST_NOTAG:
+      rlist_free((RList *)rx->data);
+      break;
+    case XT_VECTOR:
+      rlist_free((RList *)rx->data);
+      break;
     case XT_NULL:
       break;
   }
+
+  *rx = (REXP) { XT_NULL, NULL, NULL};
 }
 
 bool rexp_is_symbol(REXP *rx)
@@ -79,6 +89,10 @@ bool rexp_is_symbol(REXP *rx)
       return false;
     case XT_SYMNAME:
       return true;
+    case XT_LIST_TAG: case XT_LIST_NOTAG:
+      return false;
+    case XT_VECTOR:
+      return false;
     default:
       return false;
   }
@@ -102,6 +116,10 @@ bool rexp_is_vector(REXP *rx)
     case XT_STR: case XT_ARRAY_STR:
       return true;
     case XT_SYMNAME:
+      return false;
+    case XT_LIST_TAG: case XT_LIST_NOTAG:
+      return false;
+    case XT_VECTOR:
       return false;
     default:
       return false;
@@ -127,10 +145,43 @@ bool rexp_is_list(REXP *rx)
       return false;
     case XT_SYMNAME:
       return false;
+    case XT_LIST_TAG: case XT_LIST_NOTAG:
+      return true;
+    case XT_VECTOR:
+      return true;
     default:
       return false;
   }
 }
+
+bool rexp_is_string(REXP *rx)
+{
+  assert(rx);
+
+  switch(rx->type) {
+    case XT_NULL:
+      return false;
+    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
+      return false;
+    case XT_INT: case XT_ARRAY_INT:
+      return false;
+    case XT_LOGICAL: case XT_ARRAY_BOOL:
+      return false;
+    case XT_RAW:
+      return false;
+    case XT_STR: case XT_ARRAY_STR:
+      return true;
+    case XT_SYMNAME:
+      return false;
+    case XT_LIST_TAG: case XT_LIST_NOTAG:
+      return false;
+    case XT_VECTOR:
+      return false;
+    default:
+      return false;
+  }
+}
+
 
 int rexp_parse(REXP *rx, char *buf, int rxo)
 {
@@ -206,7 +257,7 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
         rxo++;
         if (rxo != eox) {
           if (rxo + 3 != eox) {
-            fprintf(stderr, "Warning: logical SEXP size mismatch\n");
+            fprintf(stderr, "WARN: logical SEXP size mismatch\n");
           }
         }
       }     
@@ -257,6 +308,70 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
     for(i = rxo; buf[i] != 0 && i < eox; i++);
     rx->data = calloc(i + 1, sizeof(char));
     memcpy(rx->data, buf + rxo, i);
+    rxo = eox;
+    break;
+
+
+  case XT_LIST_TAG: case XT_LIST_NOTAG:
+    REXP key, val;
+    char *tag = NULL;
+    rx->data = malloc(sizeof(RList));
+    if (rlist_init(rx->data, 10, rx->type == XT_LIST_TAG) != 0) {
+      fprintf(stderr, "ERROR: parsing list, failed to initialise RList\n");
+      return -1;
+    }
+    while (rxo < eox) {
+      val = (REXP) { XT_NULL, NULL, NULL };
+      rxo = rexp_parse(&val, buf, rxo);
+      if (rlist_has_names(rx->data)) {
+        key = (REXP) { XT_NULL, NULL, NULL }, 
+        rxo = rexp_parse(&key, buf, rxo);
+        if (rexp_is_string(&key) || rexp_is_symbol(&key)) {
+          tag = rexp_to_string(&key, ".");
+        }
+        rexp_clear(&key);
+      }
+      if (tag == NULL) {
+        rlist_add(rx->data, val);
+      } else {
+        rlist_put(rx->data, tag, val);
+      }
+    }
+    if (rxo != eox) {
+      fprintf(stderr, "WARN: list SEXP size mismatch\n");
+      rxo = eox;
+    }
+    break;
+
+  case XT_VECTOR:
+    REXP value, *names = NULL;
+    rx->data = malloc(sizeof(RList));
+    if (rlist_init(rx->data, 10, false) != 0) {
+      fprintf(stderr, "ERROR: parsing vector, failed to initialise RList\n");
+      return -1;
+    }
+    while (rxo < eox) {
+      value = (REXP) { XT_NULL, NULL, NULL };
+      rxo = rexp_parse(&value, buf, rxo);
+      rlist_add(rx->data, value);
+    }
+    if (rx->attr != NULL &&
+        rexp_is_list(rx->attr) == true &&
+        (names = rlist_get((RList *)rx->attr->data, "names")) != NULL) {
+      if (rexp_is_string(names) && rexp_is_vector(names)) {
+        for (size_t i = 0; i < rlist_size(rx->data); i++) {
+          if (i < cvector_size(names->data)) {
+            rlist_assign_name(rx->data, i, ((char **)names->data)[i]);
+          } else {
+            rlist_assign_name(rx->data, i, "");
+          }
+        }
+      }
+    }
+    if (rxo != eox) {
+      fprintf(stderr, "WARN: vector SEXP size mismatch\n");
+      rxo = eox;
+    }
     break;
   }
 
@@ -411,6 +526,58 @@ char *rexp_to_string(REXP *rx, char *sep)
       if (string) {
         memcpy(string, rx->data, strlen((char*)rx->data) + 1);
       }
+      break;
+
+    case XT_LIST_TAG: case XT_LIST_NOTAG:
+      //TODO: Implement!
+      break;
+
+    case XT_VECTOR:
+      char *tmp, *name, *value;
+      cvector(char *) strings = NULL;
+
+      cvector_init(strings, 10, free_string);
+      size = 0;
+
+      if (rlist_has_names(rx->data)) {
+        for (size_t i = 0; i < rlist_size(rx->data); i++) {
+          tmp = rlist_name_at(rx->data, i);
+          if (tmp == NULL || *tmp == '\0') {
+            name = calloc(100, sizeof(char));
+            sprintf(name, "[[%lu]]", i + 1);
+            cvector_push_back(strings, name);
+          } else {
+            name = calloc(strlen(tmp) + 2, sizeof(char));
+            sprintf(name, "$%s", tmp);
+            cvector_push_back(strings, name);
+          }
+
+          value = rexp_to_string(rlist_at(rx->data, i), " ");
+          cvector_push_back(strings, value);
+
+          size += strlen(name) + strlen(value) + 2;
+        }
+      } else {
+        for (size_t i = 0; i < rlist_size(rx->data); i++) {
+          name = calloc(100, sizeof(char));
+          sprintf(name, "[[%lu]]", i + 1);
+          cvector_push_back(strings, name);
+
+          value = rexp_to_string(rlist_at(rx->data, i), " ");
+          cvector_push_back(strings, value);
+
+          size += strlen(name) + strlen(value) + 2;
+        }
+      }
+
+      string = calloc(size + 1, sizeof(char));
+      if (cvector_size(strings) > 0) strcat(string, strings[0]);
+      for (size_t i = 1; i < cvector_size(strings); ++i) {
+        strcat(string, "\n");
+        strcat(string, strings[i]);
+      }
+
+      cvector_free(strings);
       break;
   }
 

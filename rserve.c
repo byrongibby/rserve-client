@@ -297,9 +297,7 @@ int parse_response(RPacket *rp, REXP *rx)
     return PARSE_ERR;
   }
 
-  rexp_parse(rx, rp->data, rxo);
-
-  return 0;
+  return rexp_parse(rx, rp->data, rxo) > 0 ? 0 : PARSE_ERR;
 }
 
 int init_ocap(RConnection *conn, Buffer *hdr)

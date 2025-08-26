@@ -86,15 +86,14 @@ int main(void)
   rexp_print(&rx);
   rexp_clear(&rx);
 
-  /*
-  //"list(foo = list(1, 'Z', FALSE), 'bar' = PI, 'baz')"
-  if(rserve_eval(&conn, "list(a = 1, b = 2, c = 3)", &rx) == 0) {
-    printf("Generic vector (named list):\n");
-    rexp_print(&rx);
-    printf("\n");
+  if((ret = rserve_eval(&conn, "list(foo = list(1, 'Z', FALSE), 'bar' = pi, 'baz')", &rx)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(ret));
+    printf("Failed to evaluate generic vector\n");
+    return 1;
   }
+  printf("Generic vector (named list):\n");
+  rexp_print(&rx);
   rexp_clear(&rx);
-  */
 
   rserve_disconnect(&conn);
 
