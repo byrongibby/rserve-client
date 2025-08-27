@@ -7,9 +7,17 @@
 #include "strings.h"
 
 /* Custom destructor for vector of string */
-static void free_string(void *str) {
+static void free_string(void *str)
+{
   if (str) {
     free(*(char **)str);
+  }
+}
+
+static void free_rexp(void *rx)
+{
+  if (rx) {
+    rexp_clear(rx);
   }
 }
 
@@ -25,7 +33,7 @@ int rlist_init(RList* rl, size_t capacity, bool has_names)
     if (cvector_capacity(rl->names) != capacity) return RLIST_ERROR;
   } 
 
-  cvector_reserve(rl->values, capacity);
+  cvector_init(rl->values, capacity, free_rexp);
 
   return cvector_capacity(rl->values) == capacity ? RLIST_SUCCESS : RLIST_ERROR;
 }
@@ -35,6 +43,7 @@ void rlist_free(RList* rl) {
 
   if (rl->names) cvector_free(rl->names);
   if (rl->values) cvector_free(rl->values);
+  free(rl);
 }
 
 bool rlist_has_names(RList* rl)

@@ -188,7 +188,7 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
   assert(rx);
   assert(buf);
 
-  int rxl, eox, size, i;
+  int rxl, eox, size, i, len;
   bool has_attr, is_long;
 
   rxl = get_len(buf, rxo);
@@ -202,6 +202,7 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
 
   if (has_attr) {
     rx->attr = malloc(sizeof(REXP));
+    rx->attr->attr = NULL;
     rxo = rexp_parse(rx->attr, buf, rxo);
   }
 
@@ -210,7 +211,7 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       break;
 
     case XT_DOUBLE: case XT_ARRAY_DOUBLE:
-      cvector(double) doubles = NULL;
+      cvector(double) doubles = NULL; //FIXME: cvector_reserve() where array size is known
       double d;
       long l;
       while (rxo < eox) {
@@ -306,11 +307,11 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
 
   case XT_SYMNAME:
     for(i = rxo; buf[i] != 0 && i < eox; i++);
-    rx->data = calloc(i + 1, sizeof(char));
-    memcpy(rx->data, buf + rxo, i);
+    len = i - rxo;
+    rx->data = calloc(len + 1, sizeof(char));
+    memcpy(rx->data, buf + rxo, len);
     rxo = eox;
     break;
-
 
   case XT_LIST_TAG: case XT_LIST_NOTAG:
     REXP key, val;
@@ -345,6 +346,7 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
 
   case XT_VECTOR:
     REXP value, *names = NULL;
+    char *name = NULL;
     rx->data = malloc(sizeof(RList));
     if (rlist_init(rx->data, 10, false) != 0) {
       fprintf(stderr, "ERROR: parsing vector, failed to initialise RList\n");
@@ -361,7 +363,10 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       if (rexp_is_string(names) && rexp_is_vector(names)) {
         for (size_t i = 0; i < rlist_size(rx->data); i++) {
           if (i < cvector_size(names->data)) {
-            rlist_assign_name(rx->data, i, ((char **)names->data)[i]);
+            len = strlen(((char **)names->data)[i]);
+            name = malloc(len + 1);
+            memcpy(name, ((char **)names->data)[i], len + 1);
+            rlist_assign_name(rx->data, i, name);
           } else {
             rlist_assign_name(rx->data, i, "");
           }
@@ -522,14 +527,15 @@ char *rexp_to_string(REXP *rx, char *sep)
       break;
 
     case XT_SYMNAME:
-      string = calloc(strlen((char*)rx->data) + 1, sizeof(char));
+      size = strlen((char *)rx->data);
+      string = calloc(size + 1, sizeof(char));
       if (string) {
-        memcpy(string, rx->data, strlen((char*)rx->data) + 1);
+        memcpy(string, rx->data, size);
       }
       break;
 
     case XT_LIST_TAG: case XT_LIST_NOTAG:
-      //TODO: Implement!
+      //FIXME: Implement!
       break;
 
     case XT_VECTOR:
@@ -590,7 +596,6 @@ void rexp_print(REXP *rx)
   puts(s);
   free(s);
 }
-
 
 int rexp_binlen(REXP *rx)
 {
