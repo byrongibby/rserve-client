@@ -49,7 +49,6 @@ int main(void)
   rexp_print(&rx);
   rexp_clear(&rx);
 
-
   if ((ret = rserve_eval(&conn, "as.integer(c(1:5, NA, 7))", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
     printf("Failed to evaluate vector of int\n");
@@ -86,7 +85,7 @@ int main(void)
   rexp_print(&rx);
   rexp_clear(&rx);
 
-  if((ret = rserve_eval(&conn, "list(foo = list(1, 'Z', FALSE), 'bar' = pi, 'baz')", &rx)) != 0) {
+  if((ret = rserve_eval(&conn, "list(foo = list(1L, 'Z', FALSE), 'bar' = pi, 'baz')", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
     printf("Failed to evaluate generic vector\n");
     return 1;

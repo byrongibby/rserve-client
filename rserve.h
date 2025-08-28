@@ -11,6 +11,7 @@ typedef enum {
   DT_BYTESTREAM = 5,
   DT_SEXP       = 10,
   DT_ARRAY      = 11,
+  DT_CUSTOM     = 32,
   DT_LARGE      = 64,
 } RsrvDataType;
 

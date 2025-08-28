@@ -39,29 +39,32 @@ void rexp_clear(REXP *rx)
   if (rx->attr) rexp_free(rx->attr);
 
   switch(rx->type) {
-    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
+    case XT_ARRAY_DOUBLE:
       cvector_free((double *)rx->data);
       break;
-    case XT_INT: case XT_ARRAY_INT:
+    case XT_ARRAY_INT:
       cvector_free((int *)rx->data);
       break;
-    case XT_LOGICAL: case XT_ARRAY_BOOL:
+    case XT_ARRAY_BOOL:
       cvector_free((char *)rx->data);
       break;
     case XT_RAW:
       cvector_free((char *)rx->data);
       break;
-    case XT_STR: case XT_ARRAY_STR:
+    case XT_ARRAY_STR:
       cvector_free((char **)rx->data);
       break;
-    case XT_SYMNAME:
+    case XT_STR: case XT_SYMNAME:
       free((char *)rx->data);
       break;
+    case XT_LANG_TAG: case XT_LANG_NOTAG:
     case XT_LIST_TAG: case XT_LIST_NOTAG:
       rlist_free((RList *)rx->data);
       break;
-    case XT_VECTOR:
+    case XT_VECTOR: case XT_VECTOR_EXP:
       rlist_free((RList *)rx->data);
+      break;
+    case XT_UNKNOWN:
       break;
     case XT_NULL:
       break;
@@ -70,125 +73,45 @@ void rexp_clear(REXP *rx)
   *rx = (REXP) { XT_NULL, NULL, NULL};
 }
 
-bool rexp_is_symbol(REXP *rx)
-{
-  assert(rx);
-
-  switch(rx->type) {
-    case XT_NULL:
-      return false;
-    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
-      return false;
-    case XT_INT: case XT_ARRAY_INT:
-      return false;
-    case XT_LOGICAL: case XT_ARRAY_BOOL:
-      return false;
-    case XT_RAW:
-      return false;
-    case XT_STR: case XT_ARRAY_STR:
-      return false;
-    case XT_SYMNAME:
-      return true;
-    case XT_LIST_TAG: case XT_LIST_NOTAG:
-      return false;
-    case XT_VECTOR:
-      return false;
-    default:
-      return false;
-  }
-}
-
 bool rexp_is_vector(REXP *rx)
 {
   assert(rx);
 
-  switch(rx->type) {
-    case XT_NULL:
-      return false;
-    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
-      return true;
-    case XT_INT: case XT_ARRAY_INT:
-      return true;
-    case XT_LOGICAL: case XT_ARRAY_BOOL:
-      return true;
-    case XT_RAW:
-      return true;
-    case XT_STR: case XT_ARRAY_STR:
-      return true;
-    case XT_SYMNAME:
-      return false;
-    case XT_LIST_TAG: case XT_LIST_NOTAG:
-      return false;
-    case XT_VECTOR:
-      return false;
-    default:
-      return false;
-  }
+  return rx->type == XT_ARRAY_DOUBLE ||
+    rx->type == XT_ARRAY_INT ||
+    rx->type == XT_ARRAY_BOOL ||
+    rx->type == XT_ARRAY_STR ||
+    rx->type == XT_RAW;
 }
 
 bool rexp_is_list(REXP *rx)
 {
   assert(rx);
 
-  switch(rx->type) {
-    case XT_NULL:
-      return false;
-    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
-      return false;
-    case XT_INT: case XT_ARRAY_INT:
-      return false;
-    case XT_LOGICAL: case XT_ARRAY_BOOL:
-      return false;
-    case XT_RAW:
-      return false;
-    case XT_STR: case XT_ARRAY_STR:
-      return false;
-    case XT_SYMNAME:
-      return false;
-    case XT_LIST_TAG: case XT_LIST_NOTAG:
-      return true;
-    case XT_VECTOR:
-      return true;
-    default:
-      return false;
-  }
+  return rx->type == XT_LANG_TAG ||
+    rx->type == XT_LANG_NOTAG ||
+    rx->type == XT_LIST_TAG ||
+    rx->type == XT_LIST_NOTAG ||
+    rx->type == XT_VECTOR ||
+    rx->type == XT_VECTOR_EXP;
 }
 
 bool rexp_is_string(REXP *rx)
 {
   assert(rx);
 
-  switch(rx->type) {
-    case XT_NULL:
-      return false;
-    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
-      return false;
-    case XT_INT: case XT_ARRAY_INT:
-      return false;
-    case XT_LOGICAL: case XT_ARRAY_BOOL:
-      return false;
-    case XT_RAW:
-      return false;
-    case XT_STR: case XT_ARRAY_STR:
-      return true;
-    case XT_SYMNAME:
-      return false;
-    case XT_LIST_TAG: case XT_LIST_NOTAG:
-      return false;
-    case XT_VECTOR:
-      return false;
-    default:
-      return false;
-  }
+   return rx->type == XT_SYMNAME ||
+    rx->type == XT_STR;
 }
 
 
-int rexp_parse(REXP *rx, char *buf, int rxo)
+int rexp_decode(REXP *rx, char *buf, int rxo)
 {
   assert(rx);
   assert(buf);
 
-  int rxl, eox, size, i, len;
+  int rxl, eox, i;
+  size_t size;
   bool has_attr, is_long;
 
   rxl = get_len(buf, rxo);
@@ -203,15 +126,17 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
   if (has_attr) {
     rx->attr = malloc(sizeof(REXP));
     rx->attr->attr = NULL;
-    rxo = rexp_parse(rx->attr, buf, rxo);
+    rxo = rexp_decode(rx->attr, buf, rxo);
   }
 
   switch(rx->type) {
     case XT_NULL:
       break;
 
-    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
-      cvector(double) doubles = NULL; //FIXME: cvector_reserve() where array size is known
+    case XT_ARRAY_DOUBLE:
+      size = (eox  - rxo) / 8;
+      cvector(double) doubles = NULL;
+      cvector_reserve(doubles, size);
       double d;
       long l;
       while (rxo < eox) {
@@ -227,8 +152,10 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       }
       break;
 
-    case XT_INT: case XT_ARRAY_INT:
+    case XT_ARRAY_INT:
+      size = (eox  - rxo) / 4;
       cvector(int) integers = NULL;
+      cvector_reserve(integers, size);
       while (rxo < eox) {
         i = get_int(buf, rxo);
         cvector_push_back(integers, i);
@@ -241,27 +168,17 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       }
       break;
 
-    case XT_LOGICAL: case XT_ARRAY_BOOL:
-      size = 1;
-      if (rx->type == XT_ARRAY_BOOL) {
-        size = get_int(buf, rxo);
-        rxo += 4;
-      }
+    case XT_ARRAY_BOOL:
+      size = get_int(buf, rxo);
+      rxo += 4;
       cvector(char) logicals = NULL;
+      cvector_reserve(logicals, size);
       char b;
-      for (int i = rxo; i < rxo + size; ++i) {
+      for (size_t i = rxo; i < rxo + size; ++i) {
         b = (buf[i] == TRUE || buf[i] == FALSE) ? buf[i] : NA;
         cvector_push_back(logicals, b);
       }
       rx->data = logicals;
-      if (rx->type == XT_LOGICAL) {
-        rxo++;
-        if (rxo != eox) {
-          if (rxo + 3 != eox) {
-            fprintf(stderr, "WARN: logical SEXP size mismatch\n");
-          }
-        }
-      }     
       rxo = eox;
       break;
 
@@ -269,16 +186,18 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       size = get_int(buf, rxo);
       rxo += 4;
       cvector(char) bytes = NULL;
-      for (int i = rxo; i < rxo + size; ++i) {
+      cvector_reserve(bytes, size);
+      for (size_t i = rxo; i < rxo + size; ++i) {
         cvector_push_back(bytes, buf[i]);
       }
       rx->data = bytes;
       rxo = eox;
       break;
 
-    case XT_STR: case XT_ARRAY_STR:
+    case XT_ARRAY_STR:
+      size = 10;
       cvector(char *) strings = NULL;
-      cvector_init(strings, 1, free_string);
+      cvector_init(strings, size, free_string);
       char *s;
       i = rxo;
       while (rxo < eox) {
@@ -305,30 +224,33 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       rxo = eox;
       break;
 
-  case XT_SYMNAME:
+  case XT_STR: case XT_SYMNAME:
     for(i = rxo; buf[i] != 0 && i < eox; i++);
-    len = i - rxo;
-    rx->data = calloc(len + 1, sizeof(char));
-    memcpy(rx->data, buf + rxo, len);
+    size = i - rxo;
+    rx->data = calloc(size + 1, sizeof(char));
+    memcpy(rx->data, buf + rxo, size);
     rxo = eox;
     break;
 
+  case XT_LANG_TAG: case XT_LANG_NOTAG:
   case XT_LIST_TAG: case XT_LIST_NOTAG:
     REXP key, val;
     char *tag = NULL;
+    size = 10;
+    bool has_names = rx->type == XT_LIST_TAG || rx->type == XT_LANG_TAG;
     rx->data = malloc(sizeof(RList));
-    if (rlist_init(rx->data, 10, rx->type == XT_LIST_TAG) != 0) {
+    if (rlist_init(rx->data, size, has_names) != 0) {
       fprintf(stderr, "ERROR: parsing list, failed to initialise RList\n");
       return -1;
     }
     while (rxo < eox) {
       val = (REXP) { XT_NULL, NULL, NULL };
-      rxo = rexp_parse(&val, buf, rxo);
+      rxo = rexp_decode(&val, buf, rxo);
       if (rlist_has_names(rx->data)) {
         key = (REXP) { XT_NULL, NULL, NULL }, 
-        rxo = rexp_parse(&key, buf, rxo);
-        if (rexp_is_string(&key) || rexp_is_symbol(&key)) {
-          tag = rexp_to_string(&key, ".");
+        rxo = rexp_decode(&key, buf, rxo);
+        if (rexp_is_string(&key)) {
+          tag = rexp_to_string(&key, "");
         }
         rexp_clear(&key);
       }
@@ -344,23 +266,25 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
     }
     break;
 
-  case XT_VECTOR:
+  case XT_VECTOR: case XT_VECTOR_EXP:
     REXP value, *names = NULL;
     char *name = NULL;
+    int len;
+    size = 10;
     rx->data = malloc(sizeof(RList));
-    if (rlist_init(rx->data, 10, false) != 0) {
+    if (rlist_init(rx->data, size, false) != 0) {
       fprintf(stderr, "ERROR: parsing vector, failed to initialise RList\n");
       return -1;
     }
     while (rxo < eox) {
       value = (REXP) { XT_NULL, NULL, NULL };
-      rxo = rexp_parse(&value, buf, rxo);
+      rxo = rexp_decode(&value, buf, rxo);
       rlist_add(rx->data, value);
     }
     if (rx->attr != NULL &&
         rexp_is_list(rx->attr) == true &&
         (names = rlist_get((RList *)rx->attr->data, "names")) != NULL) {
-      if (rexp_is_string(names) && rexp_is_vector(names)) {
+      if (names->type == XT_ARRAY_STR) {
         for (size_t i = 0; i < rlist_size(rx->data); i++) {
           if (i < cvector_size(names->data)) {
             len = strlen(((char **)names->data)[i]);
@@ -377,6 +301,9 @@ int rexp_parse(REXP *rx, char *buf, int rxo)
       fprintf(stderr, "WARN: vector SEXP size mismatch\n");
       rxo = eox;
     }
+    break;
+
+  case XT_UNKNOWN:
     break;
   }
 
@@ -400,7 +327,7 @@ char *rexp_to_string(REXP *rx, char *sep)
       }
       break;
 
-    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
+    case XT_ARRAY_DOUBLE:
       string = calloc(capacity, sizeof(char));
       if (string) {
         cvector(double) doubles = rx->data;
@@ -421,7 +348,7 @@ char *rexp_to_string(REXP *rx, char *sep)
       }
       break;
 
-    case XT_INT: case XT_ARRAY_INT:
+    case XT_ARRAY_INT:
       string = calloc(capacity, sizeof(char));
       if (string) {
         cvector(int) integers = rx->data;
@@ -450,7 +377,7 @@ char *rexp_to_string(REXP *rx, char *sep)
       }
       break;
 
-    case XT_LOGICAL: case XT_ARRAY_BOOL:
+    case XT_ARRAY_BOOL:
       string = calloc(capacity, sizeof(char));
       if (string) {
         cvector(char) logicals = rx->data;
@@ -505,7 +432,7 @@ char *rexp_to_string(REXP *rx, char *sep)
       break;
 
     //FIXME: improve to handle arbitrarily long strings
-    case XT_STR: case XT_ARRAY_STR:
+    case XT_ARRAY_STR:
       string = calloc(capacity, sizeof(char));
       if (string) {
         cvector(char *) strings = rx->data;
@@ -526,7 +453,7 @@ char *rexp_to_string(REXP *rx, char *sep)
       }
       break;
 
-    case XT_SYMNAME:
+   case XT_STR: case XT_SYMNAME:
       size = strlen((char *)rx->data);
       string = calloc(size + 1, sizeof(char));
       if (string) {
@@ -534,11 +461,12 @@ char *rexp_to_string(REXP *rx, char *sep)
       }
       break;
 
+    case XT_LANG_TAG: case XT_LANG_NOTAG:
     case XT_LIST_TAG: case XT_LIST_NOTAG:
       //FIXME: Implement!
       break;
 
-    case XT_VECTOR:
+    case XT_VECTOR: case XT_VECTOR_EXP:
       char *tmp, *name, *value;
       cvector(char *) strings = NULL;
 
@@ -585,6 +513,14 @@ char *rexp_to_string(REXP *rx, char *sep)
 
       cvector_free(strings);
       break;
+
+    case XT_UNKNOWN:
+      string = calloc(capacity, sizeof(char));
+      if (string) {
+        snprintf(string, len, "%s", "UNKNOWN");
+        size = strlen(string);
+      }
+      break;
   }
 
   return realloc(string, size + 1);
@@ -599,30 +535,28 @@ void rexp_print(REXP *rx)
 
 int rexp_binlen(REXP *rx)
 {
+  assert(rx);
+
   int len = 0;
   if (rx->attr) len += rexp_binlen(rx->attr);
   switch(rx->type) {
     case XT_NULL:
       break;
-    case XT_SYMNAME:
-      len += rx->data ? strlen((char *)rx->data) + 1 : 1;
-      if ((len & 3) > 0) len = len - (len & 3) + 4;
+    case XT_ARRAY_INT:
+      len = cvector_size((int *)rx->data) * 4;
       break;
-    case XT_INT: case XT_ARRAY_INT:
-      len += cvector_size((int *)rx->data) * 4;
+    case XT_ARRAY_DOUBLE:
+      len = cvector_size((double *)rx->data) * 8;
       break;
-    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
-      len += cvector_size((double *)rx->data) * 8;
-      break;
-    case XT_LOGICAL: case XT_ARRAY_BOOL:
-      len += cvector_size((char *)rx->data) + 4;
+    case XT_ARRAY_BOOL:
+      len = cvector_size((char *)rx->data) + 4;
       if ((len & 3) > 0) len = len - (len & 3) + 4;
       break;
     case XT_RAW:
-      len += cvector_size((char *)rx->data) + 4;
+      len = cvector_size((char *)rx->data) + 4;
       if ((len & 3) > 0) len = len - (len & 3) + 4;
       break;
-    case XT_STR: case XT_ARRAY_STR:
+    case XT_ARRAY_STR:
       for (size_t i = 0; i < cvector_size((char **)rx->data); ++i) {
         if(strlen(((char **)rx->data)[i]) > 0) {
           if (((char **)rx->data)[i][0] == -1) len++;
@@ -631,31 +565,55 @@ int rexp_binlen(REXP *rx)
       }
       if ((len & 3) > 0) len = len - (len & 3) + 4;
       break;
-    case XT_LIST_NOTAG: case XT_LIST_TAG: case XT_VECTOR:
+    case XT_STR: case XT_SYMNAME:
+      len = rx->data ? strlen((char *)rx->data) + 1 : 1;
+      if ((len & 3) > 0) len = len - (len & 3) + 4;
+      break;
+    case XT_LANG_TAG: case XT_LANG_NOTAG:
+    case XT_LIST_TAG: case XT_LIST_NOTAG:
+    case XT_VECTOR: case XT_VECTOR_EXP:
+      for (size_t i = 0; i < rlist_size(rx->data); ++i) {
+        REXP *x = rlist_at(rx->data, i);
+        len += (x == NULL) ? 4 : rexp_binlen(x);
+        if (rx->type ==  XT_LANG_TAG || rx->type ==  XT_LANG_TAG) {
+          char *s = rlist_name_at(rx->data, i);
+          len += 4; // header for a symbol
+          len += (s == NULL) ? 1 : strlen(s) + 1;
+          if ((len & 3) > 0) len = len - (len & 3) + 4;
+        }
+      }
+      if ((len & 3) > 0) len = len - (len & 3) + 4;
+      break;
+    case XT_UNKNOWN:
       break;
   }
-  return len;
+  if (len > 0xfffff0) len += 4; // large data needs 4 more bytes
+  return len + 4; // add the header
 }
 
-int rexp_to_binary(REXP *rx, char *buf, int rxo) 
+int rexp_encode(REXP *rx, char *buf, int rxo) 
 {
   buf++;
   switch(rx->type) {
     case XT_NULL:
       break;
-    case XT_SYMNAME:
+    case XT_ARRAY_INT:
       break;
-    case XT_INT: case XT_ARRAY_INT:
+    case XT_ARRAY_DOUBLE:
       break;
-    case XT_DOUBLE: case XT_ARRAY_DOUBLE:
-      break;
-    case XT_STR: case XT_ARRAY_STR:
-      break;
-    case XT_LOGICAL: case XT_ARRAY_BOOL:
+    case XT_ARRAY_BOOL:
       break;
     case XT_RAW:
       break;
-    case XT_LIST_NOTAG: case XT_LIST_TAG: case XT_VECTOR:
+    case XT_ARRAY_STR:
+      break;
+   case XT_STR: case XT_SYMNAME:
+      break;
+    case XT_LANG_TAG: case XT_LANG_NOTAG:
+    case XT_LIST_TAG: case XT_LIST_NOTAG:
+    case XT_VECTOR: case XT_VECTOR_EXP:
+      break;
+    case XT_UNKNOWN:
       break;
   }
   return rxo;

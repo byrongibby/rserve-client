@@ -270,7 +270,7 @@ int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
   int rl;
 
   if ((rl = rexp_binlen(rx)) < 0) {
-    fprintf(stderr, "ERROR: while serialising, failed to get binary length\n");
+    fprintf(stderr, "ERROR: while encoding, failed to get binary length\n");
     return SERIAL_ERR;
   }
 
@@ -278,8 +278,8 @@ int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
 
 	memset(rq, 0, sizeof(rq));
   set_hdr(DT_SEXP, rl, rq, 0);
-  if (rexp_to_binary(rx, rq,  (rl > 0xfffff0) ? 8 : 4) != 0) {
-    fprintf(stderr, "ERROR: while serialising, failed to get binary representation\n");
+  if (rexp_encode(rx, rq,  (rl > 0xfffff0) ? 8 : 4) != 0) {
+    fprintf(stderr, "ERROR: while encoding, failed to get binary representation\n");
     return SERIAL_ERR;
   }
 
@@ -304,7 +304,7 @@ int parse_response(RPacket *rp, REXP *rx)
     return PARSE_ERR;
   }
 
-  return rexp_parse(rx, rp->data, rxo) > 0 ? 0 : PARSE_ERR;
+  return rexp_decode(rx, rp->data, rxo) > 0 ? 0 : PARSE_ERR;
 }
 
 int init_ocap(RConnection *conn, Buffer *hdr)
@@ -556,6 +556,7 @@ int rserve_callocap(RConnection *conn, REXP *x, REXP *rx)
 
   if (!rpacket_is_ok(&rp)) {
     ret = rpacket_get_status(&rp);
+    //FIXME: get the type of error from the RPacket?
     fprintf(stderr, "ERROR: during callocap server returned error\n");
     rpacket_clear(&rp);
     return ret;
