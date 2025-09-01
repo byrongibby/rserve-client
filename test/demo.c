@@ -76,7 +76,7 @@ int main(void)
   rexp_print(&rx);
   rexp_clear(&rx);
 
-  if ((ret = rserve_eval(&conn, "c('abra', NA, 'ca', 'dabra')", &rx)) != 0) {
+  if ((ret = rserve_eval(&conn, "c('abra', NA, 'ca', 'dabra', '')", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
     printf("Failed to evaluate vector of strings\n");
     return 1;

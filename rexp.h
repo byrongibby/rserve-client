@@ -50,10 +50,10 @@ void rexp_clear(REXP *rx);
 bool rexp_is_string(REXP *rx);
 bool rexp_is_vector(REXP *rx);
 bool rexp_is_list(REXP *rx);
-char *rexp_to_string(REXP *rx, char *sep);
-void rexp_print(REXP *rx);
 int rexp_binlen(REXP *rx);
 int rexp_encode(REXP *rx, char *buf, int rxo);
 int rexp_decode(REXP *rx, char *buf, int rxo);
+char *rexp_to_string(REXP *rx, char *sep);
+void rexp_print(REXP *rx);
 
 #endif // REXP_H_
