@@ -19,8 +19,10 @@ add_library(rserve-client-static STATIC rserve.c rexp.c rlist.c)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(rserve-demo ${CMAKE_CURRENT_SOURCE_DIR}/test/demo.c)
+add_executable(rserve-test ${CMAKE_CURRENT_SOURCE_DIR}/test/test.c)
 
 target_link_libraries(rserve-demo rserve-client)
+target_link_libraries(rserve-test rserve-client)
 
 ###########################################################
 ## COMPILER FLAGS

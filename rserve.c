@@ -143,8 +143,8 @@ char *rpacket_to_str(char *s, size_t n, RPacket *rp)
 
 typedef struct
 {
-  char *data;
   int size;
+  char *data;
 } Buffer;
 
 int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp) 
@@ -240,52 +240,67 @@ int request(RConnection* conn, int cmd, Buffer *prefix, Buffer *cont, int offset
   return response(conn, rp);
 }
 
-int request_bytes(RConnection *conn, int cmd, Buffer *cont, int len, RPacket *rp)
+int request_bytes(RConnection *conn, int cmd, Buffer *cont, RPacket *rp)
 {
-  return request(conn, cmd, NULL, cont, 0, (cont == NULL) ? 0 : len, rp);
+  return request(conn, cmd, NULL, cont, 0, (cont == NULL) ? 0 : cont->size, rp);
 }
 
 int request_cmd(RConnection *conn, int cmd, RPacket *rp)
 {
-  return request_bytes(conn, cmd, NULL, 0, rp);
+  return request_bytes(conn, cmd, NULL, rp);
 }
 
 int request_string(RConnection *conn, int cmd, char* x, RPacket *rp)
 {
-  int sl = strlen(x) + 1;
+  int sl, ret;
+  Buffer rq = { 0 };
+
+  sl = strlen(x) + 1;
   if ((sl & 3) > 0) sl = (sl & 0xfffffc) + 4;
 
-  char rq[sl + 5];
-	memset(rq, 0, sizeof(rq));
-  memcpy(rq + 4, x, strlen(x));
+  rq.size = sl + 5;
 
-  set_hdr(DT_STRING, sl, rq, 0);
-  Buffer *cont = &(Buffer) { .data = rq, .size = sizeof(rq) };
+  //FIXME: ErrNo
+  rq.data = calloc(rq.size, sizeof(char));
+  memcpy(rq.data + 4, x, strlen(x));
   
-  return request_bytes(conn, cmd, cont, cont->size, rp);
+  set_hdr(DT_STRING, sl, rq.data, 0);
+
+  ret = request_bytes(conn, cmd, &rq, rp);
+
+  free(rq.data);
+
+  return ret;
 }
 
 int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
 {
-  int rl;
+  int rl, ret;
+  Buffer rq = { 0 };
 
   if ((rl = rexp_binlen(rx)) < 0) {
     fprintf(stderr, "ERROR: while encoding, failed to get binary length\n");
-    return SERIAL_ERR;
+    return ENCODE_ERR;
   }
 
-  char rq[rl + ((rl > 0xfffff0) ? 8 : 4)];
+  rq.size = rl + ((rl > 0xfffff0) ? 8 : 4);
 
-	memset(rq, 0, sizeof(rq));
-  set_hdr(DT_SEXP, rl, rq, 0);
-  if (rexp_encode(rx, rq,  (rl > 0xfffff0) ? 8 : 4) != 0) {
+  //FIXME: ErrNo
+  rq.data = calloc(rq.size, sizeof(char));
+
+  set_hdr(DT_SEXP, rl, rq.data, 0);
+
+  if (rexp_encode(rx, rq.data, rq.size - rl) != 0) {
     fprintf(stderr, "ERROR: while encoding, failed to get binary representation\n");
-    return SERIAL_ERR;
+    free(rq.data);
+    return ENCODE_ERR;
   }
 
-  Buffer *cont = &(Buffer) { .data = rq, .size = sizeof(rq) };
-  
-  return request_bytes(conn, cmd, cont, cont->size, rp);
+  ret = request_bytes(conn, cmd, &rq, rp);
+
+  free(rq.data);
+
+  return ret;
 }
 
 int parse_response(RPacket *rp, REXP *rx)
@@ -294,17 +309,17 @@ int parse_response(RPacket *rp, REXP *rx)
 
   if (*rp->data != DT_SEXP && *rp->data != (DT_SEXP | DT_LARGE)) {
     fprintf(stderr, "ERROR: while parsing, incorrect data type returned by server\n");
-    return PARSE_ERR;
+    return DECODE_ERR;
   }
 
   if (*rp->data == (DT_SEXP | DT_LARGE)) rxo = 8; else rxo = 4;
 
   if (rp->size <= rxo) {
     fprintf(stderr, "ERROR: while parsing, packet size mismatch\n");
-    return PARSE_ERR;
+    return DECODE_ERR;
   }
 
-  return rexp_decode(rx, rp->data, rxo) > 0 ? 0 : PARSE_ERR;
+  return rexp_decode(rx, rp->data, rxo) > 0 ? 0 : DECODE_ERR;
 }
 
 int init_ocap(RConnection *conn, Buffer *hdr)
@@ -512,7 +527,7 @@ int rserve_eval(RConnection *conn, char *x, REXP *rx)
   }
 
   int ret = 0;
-  RPacket rp = { 0, 0, NULL }; 
+  RPacket rp = { 0 }; 
 
   if ((ret = request_string(conn, CMD_EVAL, x, &rp)) != 0) {
     rpacket_clear(&rp);
@@ -538,17 +553,18 @@ int rserve_eval(RConnection *conn, char *x, REXP *rx)
   return ret;
 }
 
-int rserve_callocap(RConnection *conn, REXP *x, REXP *rx)
+int rserve_callocap(RConnection *conn, REXP *ocap, REXP *rx)
 {
   assert(conn);
+  assert(ocap);
   assert(rx);
   assert(conn->connected);
   assert(conn->is_ocap);
 
   int ret = 0;
-  RPacket rp = { 0, 0, NULL }; 
+  RPacket rp = { 0 }; 
 
-  if ((ret = request_rexp(conn, CMD_OCCALL, x, &rp)) != 0) {
+  if ((ret = request_rexp(conn, CMD_OCCALL, ocap, &rp)) != 0) {
     rpacket_clear(&rp);
     fprintf(stderr, "ERROR: during callocap, request failed\n");
     return ret;
@@ -573,17 +589,94 @@ int rserve_callocap(RConnection *conn, REXP *x, REXP *rx)
   return ret;
 }
 
-/*
-int rserve_assign()
+int rserve_assign(RConnection *conn, char *sym, REXP *rx)
 {
+  assert(conn);
+  assert(sym);
+  assert(rx);
+  assert(conn->connected);
 
+  int sl, rl, ret;
+  Buffer rq =  { 0 };
+  RPacket rp = { 0 }; 
+
+  sl = strlen(sym) + 1;
+  // make sure the symbol length is divisible by 4
+  if ((sl & 3) > 0) sl = (sl & 0xfffffc) + 4; 
+
+  if ((rl = rexp_binlen(rx)) < 0) {
+    fprintf(stderr, "ERROR: while encoding, failed to get binary length\n");
+    return ENCODE_ERR;
+  }
+
+  rq.size = sl + rl + ((rl > 0xfffff0) ? 12 : 8);
+
+  if ((rq.data = calloc(rq.size, sizeof(char))) == NULL) {
+    fprintf(stderr, "ERROR: while encoding, failed to alloc request\n");
+    //ErrNo?
+    return ENCODE_ERR;
+  }
+
+  set_hdr(DT_STRING, sl, rq.data, 0);
+
+  for (size_t i  = 0; i <  strlen(sym); ++i) rq.data[i + 4] = sym[i];
+
+  set_hdr(DT_SEXP, rl, rq.data, sl + 4);
+
+  if ((ret = rexp_encode(rx, rq.data, rq.size - rl)) < 0) {
+    fprintf(stderr, "ERROR: while encoding, failed to get binary representation\n");
+    free(rq.data);
+    return ret;
+  }
+
+  if ((ret = request_bytes(conn, CMD_SETSEXP, &rq, &rp)) != 0) {
+    rpacket_clear(&rp);
+    free(rq.data);
+    fprintf(stderr, "ERROR: during assign, request failed\n");
+    return ret;
+  }
+
+  if (!rpacket_is_ok(&rp)) {
+    ret = rpacket_get_status(&rp);
+    //FIXME: get the type of error from the RPacket?
+    fprintf(stderr, "ERROR: during assign server returned error\n");
+    free(rq.data);
+    rpacket_clear(&rp);
+    return ret;
+  }
+
+  free(rq.data);
+  rpacket_clear(&rp);
+
+  return ret;
 }
 
-int rserve_shutdown()
+int rserve_shutdown(RConnection *conn)
 {
+  assert(conn);
+  assert(conn->connected);
 
+  int ret = 0;
+  RPacket rp = { 0, 0, NULL }; 
+
+  if ((ret = request_cmd(conn, CMD_SHUTDOWN, &rp)) != 0) {
+    rpacket_clear(&rp);
+    fprintf(stderr, "ERROR: during shutdown, request failed\n");
+    return ret;
+  }
+
+  if (!rpacket_is_ok(&rp)) {
+    ret = rpacket_get_status(&rp);
+    //FIXME: get the type of error from the RPacket?
+    fprintf(stderr, "ERROR: during shutdown, server returned error\n");
+    rpacket_clear(&rp);
+    return ret;
+  }
+
+  rpacket_clear(&rp);
+
+  return ret;
 }
-*/
 
 const char *rserve_error(int err)
 {
@@ -596,7 +689,9 @@ const char *rserve_error(int err)
       return "Client not connected to an Rserve instance";
     case READ_ERR:
       return "Client failed to read from Rserve";
-    case PARSE_ERR:
+    case DECODE_ERR:
+      return "Client failed to parse Rserve response";
+    case ENCODE_ERR:
       return "Client failed to parse Rserve response";
     default:
       return "Unknown error";

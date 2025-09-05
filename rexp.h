@@ -36,8 +36,9 @@ typedef enum
   //XT_ARRAY_CPLX    = 38,
   XT_UNKNOWN       = 48,
   //XT_FACTOR        = 127,
-  //XT_HAS_ATTR      = 128
 } REXPType;
+
+#define XT_HAS_ATTR 128
 
 typedef struct REXP {
   REXPType type;
@@ -50,6 +51,7 @@ void rexp_clear(REXP *rx);
 bool rexp_is_string(REXP *rx);
 bool rexp_is_vector(REXP *rx);
 bool rexp_is_list(REXP *rx);
+bool rexp_equals(REXP *rx, REXP *ry);
 int rexp_binlen(REXP *rx);
 int rexp_encode(REXP *rx, char *buf, int rxo);
 int rexp_decode(REXP *rx, char *buf, int rxo);

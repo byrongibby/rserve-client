@@ -10,6 +10,7 @@
 #include "rlist.h"
 #include "rserve.h"
 
+extern int set_hdr(int32_t type, int32_t len, char* y, size_t o);
 extern int get_len(char* y, size_t o);
 extern void set_int(int32_t x, char* y, size_t o);
 extern int get_int(char* y, size_t o);
@@ -537,6 +538,43 @@ void rexp_print(REXP *rx)
   free(s);
 }
 
+bool rexp_equals(REXP *rx, REXP *ry)
+{
+  assert(rx);
+  assert(ry);
+
+  if (rx->type != ry->type) return false;
+
+  switch(rx->type) {
+    case XT_NULL:
+    case XT_STR:
+    case XT_VECTOR:
+    case XT_SYMNAME:
+    case XT_LIST_NOTAG:
+    case XT_LIST_TAG:
+    case XT_LANG_NOTAG:
+    case XT_LANG_TAG:
+    case XT_VECTOR_EXP:
+    case XT_ARRAY_DOUBLE:
+    case XT_ARRAY_STR:
+    case XT_ARRAY_BOOL:
+    case XT_RAW:
+    case XT_UNKNOWN:
+      break;
+    case XT_ARRAY_INT:
+      int *xi = (int *)rx->data, *yi = (int *)ry->data;
+      if (cvector_size(xi) != cvector_size(yi)) return false;
+      for (size_t i = 0; i < cvector_size(xi); ++i) {
+        if (xi[i] != yi[i]) return false;
+      }
+      break;
+    default:
+      return false;
+  }
+
+  return true;
+}
+
 int rexp_binlen(REXP *rx)
 {
   assert(rx);
@@ -608,7 +646,10 @@ int rexp_encode(REXP *rx, char *buf, int rxo)
   assert(rx);
 
   int len = rexp_binlen(rx), rxs = rxo, rxi;
-  bool is_large = len > 0xfffff0;
+  bool has_attr = false, is_large = len > 0xfffff0;
+
+  set_hdr(rx->type | (has_attr ? XT_HAS_ATTR : 0), len - (is_large ? 8 : 4), buf, rxo);
+
   rxo += is_large ? 8 : 4;
 
   switch(rx->type) {
@@ -674,5 +715,6 @@ int rexp_encode(REXP *rx, char *buf, int rxo)
     case XT_UNKNOWN:
       break;
   }
+
   return rxs + len;
 }

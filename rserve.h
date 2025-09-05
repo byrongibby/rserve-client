@@ -20,8 +20,8 @@ typedef enum {
   HSHK_FAILED  = 0x31,
   DISCONNECTED = 0x32,
   READ_ERR     = 0x33,
-  PARSE_ERR    = 0x34,
-  SERIAL_ERR   = 0x35,
+  DECODE_ERR   = 0x34,
+  ENCODE_ERR   = 0x35,
 } RsrvClientError;
 
 typedef enum {
@@ -79,10 +79,9 @@ int rserve_connect(RConnection *conn, char *host, int port);
 int rserve_disconnect(RConnection* conn);
 int rserve_login(RConnection *conn, char *user, char *pwd);
 int rserve_eval(RConnection *conn, char *cmd, REXP *rx);
-int rserve_callocap(RConnection *conn, REXP *x, REXP *rx);
-//int rserve_assign()
-//int rserve_assignrexp()
-//int rserve_shutdown()
+int rserve_callocap(RConnection *conn, REXP *ocap, REXP *rx);
+int rserve_assign(RConnection *conn, char *sym, REXP *rx);
+int rserve_shutdown(RConnection *conn);
 const char *rserve_error(int err);
 
 #endif /* RSERVE_H_ */
