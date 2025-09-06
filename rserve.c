@@ -157,7 +157,7 @@ int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp)
     errno = 0;
     if ((n = read(conn->sockfd, hdr->data, hdr->size)) != 16) {
       if (n < 0) {
-        fprintf(stderr, "ERROR: while reading header: %s\n", strerror(errno));
+        fprintf(stderr, "ERROR: while reading header, %s\n", strerror(errno));
       }
       fprintf(stderr, "ERROR: while reading header\n");
       return READ_ERR;
@@ -171,7 +171,7 @@ int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp)
     errno = 0;
     n = 0;
     if ((rp->data = malloc(rp->size)) == NULL) {
-      fprintf(stderr, "ERROR: while reading content: %s\n", strerror(errno));
+      fprintf(stderr, "ERROR: while reading content, %s\n", strerror(errno));
       return READ_ERR;
     }
     if (hdr->size > 16) {
@@ -181,7 +181,7 @@ int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp)
     while (n < rp->size) {
       errno = 0;
       if ((n += read(conn->sockfd, rp->data + n, rp->size - n)) < 0) {
-        fprintf(stderr, "ERROR: while reading content: %s\n", strerror(errno));
+        fprintf(stderr, "ERROR: while reading content, %s\n", strerror(errno));
         return READ_ERR;
       }
     }
@@ -220,18 +220,18 @@ int request(RConnection* conn, int cmd, Buffer *prefix, Buffer *cont, int offset
 
   if (cmd != -1) {
     if (write(conn->sockfd, hdr, sizeof(hdr)) < 0) {
-      fprintf(stderr, "ERROR: Request: Failed to write header\n");
+      fprintf(stderr, "ERROR: Request, failed to write header\n");
       return READ_ERR;
     }
     if (prefix != NULL && prefix->size > 0) {
       if (write(conn->sockfd, cont->data + offset, len) < 0) {
-        fprintf(stderr, "ERROR: Request: Failed to write prefix\n");
+        fprintf(stderr, "ERROR: Request, failed to write prefix\n");
         return READ_ERR;
       }
     }
     if (cont != NULL && cont->size > 0) {
       if (write(conn->sockfd, cont->data + offset, len) < 0) {
-        fprintf(stderr, "ERROR: Request: Failed to write content\n");
+        fprintf(stderr, "ERROR: Request, failed to write content\n");
         return READ_ERR;
       }
     }
@@ -367,7 +367,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
   errno = 0;
 
 	if ((conn->sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    fprintf(stderr, "ERROR: creating socket: %s\n", strerror(errno));
+    fprintf(stderr, "ERROR: creating socket, %s\n", strerror(errno));
 		return CONN_ERR;
 	}
 
@@ -376,7 +376,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
 	serv_addr.sin_port = htons(conn->port);
 
 	if ((ret = inet_pton(AF_INET, conn->host, &serv_addr.sin_addr)) < 0) {
-    fprintf(stderr, "ERROR: invalid address family: %s\n", strerror(errno));
+    fprintf(stderr, "ERROR: invalid address family, %s\n", strerror(errno));
 		return CONN_ERR;
 	} else if (ret == 0) {
     fprintf(stderr, "ERROR: host string not valid\n");
@@ -384,14 +384,14 @@ int rserve_connect(RConnection *conn, char *host, int port)
   }
 
 	if (connect(conn->sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-    fprintf(stderr, "ERROR: connecting socket: %s\n", strerror(errno));
+    fprintf(stderr, "ERROR: connecting socket, %s\n", strerror(errno));
 		return CONN_ERR;
 	} else {
     conn->connected = true;
   }
 
 	if ((n = read(conn->sockfd, ids, sizeof(ids))) < 0) {
-    fprintf(stderr, "ERROR: reading from socket: %s\n", strerror(errno));
+    fprintf(stderr, "ERROR: reading from socket, %s\n", strerror(errno));
     rserve_disconnect(conn);
     return CONN_ERR;
 	}
@@ -400,7 +400,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
 
   if (n >= 16 && strcmp(attr, "RsOC") == 0) {
     Buffer header = { .data = NULL, .size = n};
-    /* it is possible that the buffering doesn't work out
+    /* It is possible that the buffering doesn't work out
      * and the first packet is < 32 bytes, in which case
      * we have to re-wrap the array to have the correct length
      * */
@@ -415,13 +415,13 @@ int rserve_connect(RConnection *conn, char *host, int port)
   }
   
   if (n != 32) {
-    fprintf(stderr, "ERROR: handshake failed: expected 32 bytes header\n");
+    fprintf(stderr, "ERROR: handshake failed, expected 32 bytes header\n");
     rserve_disconnect(conn);
     return HSHK_FAILED;
   }
 
   if (strcmp(attr, "Rsrv") != 0) {
-    fprintf(stderr, "ERROR: handshake failed: Rsrv signature expected\n");
+    fprintf(stderr, "ERROR: handshake failed, Rsrv signature expected\n");
     rserve_disconnect(conn);
     return HSHK_FAILED;
   }
@@ -430,7 +430,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
   conn->rsrv_ver = atoi(attr);
 
   if (conn->rsrv_ver != 103) {
-    fprintf(stderr, "ERROR: handshake failed: client/server protocol mismatch\n");
+    fprintf(stderr, "ERROR: handshake failed, client/server protocol mismatch\n");
     rserve_disconnect(conn);
     return HSHK_FAILED;
   }
@@ -438,7 +438,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
   memcpy(attr, ids + 8, attrlen);
 
   if (strcmp(attr, "QAP1") != 0) {
-    fprintf(stderr, "ERROR: handshake failed: unupported transfer protocol\n");
+    fprintf(stderr, "ERROR: handshake failed, unupported transfer protocol\n");
     rserve_disconnect(conn);
     return HSHK_FAILED;
   }
@@ -475,7 +475,7 @@ int rserve_disconnect(RConnection* conn)
   errno = 0; //FIXME: check errno?
 
   if ((ret = shutdown(conn->sockfd, 2)) != 0 ) {
-    fprintf(stderr, "ERROR: while disconnecting: %s\n", strerror(errno));
+    fprintf(stderr, "ERROR: while disconnecting, %s\n", strerror(errno));
   }
 
   return ret;
@@ -487,7 +487,7 @@ int rserve_login(RConnection *conn, char *user, char *pwd)
   RPacket rp = { 0, 0, NULL };
 
   if (!conn->connected) {
-    fprintf(stderr, "ERROR: Login failed: Not connected\n");
+    fprintf(stderr, "ERROR: Login failed, not connected\n");
     return CONN_ERR;
   }
 
@@ -504,13 +504,13 @@ int rserve_login(RConnection *conn, char *user, char *pwd)
   if (!rpacket_is_ok(&rp)) {
     int ret = rpacket_get_status(&rp);
     rpacket_clear(&rp);
-    fprintf(stderr, "ERROR: Login failed: Unable to process server response\n");
+    fprintf(stderr, "ERROR: Login failed, unable to process server response\n");
     return ret;
   }
 
   rpacket_clear(&rp);
 
-  fprintf(stderr, "INFO: Login success: Logged in to Rserve\n");
+  fprintf(stderr, "INFO: Login success, logged in to Rserve\n");
 
   return 0;
 }
@@ -690,9 +690,9 @@ const char *rserve_error(int err)
     case READ_ERR:
       return "Client failed to read from Rserve";
     case DECODE_ERR:
-      return "Client failed to parse Rserve response";
+      return "Client failed to decode Rserve response";
     case ENCODE_ERR:
-      return "Client failed to parse Rserve response";
+      return "Client failed to encode Rserve request";
     default:
       return "Unknown error";
   }

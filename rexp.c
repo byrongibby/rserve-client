@@ -18,7 +18,7 @@ extern void set_long(int64_t x, char* y, size_t o);
 extern long get_long(char* y, size_t o);
 
 
-/* Custom destructor for vector of string */
+/* Custom destructor for cvector of string */
 static void free_string(void *str) {
   if (str) {
     free(*(char **)str);
@@ -547,20 +547,18 @@ bool rexp_equals(REXP *rx, REXP *ry)
 
   switch(rx->type) {
     case XT_NULL:
-    case XT_STR:
-    case XT_VECTOR:
-    case XT_SYMNAME:
-    case XT_LIST_NOTAG:
-    case XT_LIST_TAG:
-    case XT_LANG_NOTAG:
-    case XT_LANG_TAG:
-    case XT_VECTOR_EXP:
-    case XT_ARRAY_DOUBLE:
-    case XT_ARRAY_STR:
-    case XT_ARRAY_BOOL:
-    case XT_RAW:
-    case XT_UNKNOWN:
       break;
+
+    case XT_ARRAY_DOUBLE:
+      double *xd = (double *)rx->data, *yd = (double *)ry->data, tol = 1e-10;
+      if (cvector_size(xd) != cvector_size(yd)) return false;
+      for (size_t i = 0; i < cvector_size(xd); ++i) {
+        // x != x is only true if x = nan
+        if (!(xd[i] != xd[i] && yd[i] != yd[i]) &&
+            !(xd[i] - yd[i] > -tol && xd[i] - yd[i] < tol)) return false;
+      }
+      break;
+
     case XT_ARRAY_INT:
       int *xi = (int *)rx->data, *yi = (int *)ry->data;
       if (cvector_size(xi) != cvector_size(yi)) return false;
@@ -568,6 +566,34 @@ bool rexp_equals(REXP *rx, REXP *ry)
         if (xi[i] != yi[i]) return false;
       }
       break;
+
+    case XT_ARRAY_BOOL: case XT_RAW:
+      char *xb = (char *)rx->data, *yb = (char *)ry->data;
+      if (cvector_size(xb) != cvector_size(yb)) return false;
+      for (size_t i = 0; i < cvector_size(xb); ++i) {
+        if (xb[i] != yb[i]) return false;
+      }
+      break;
+
+    case XT_ARRAY_STR:
+      break;
+
+    case XT_STR: case XT_SYMNAME:
+      break;
+
+    case XT_LIST_NOTAG:
+    case XT_LANG_NOTAG:
+    case XT_VECTOR:
+    case XT_VECTOR_EXP:
+      break;
+
+    case XT_LIST_TAG:
+    case XT_LANG_TAG:
+      break;
+
+    case XT_UNKNOWN:
+      break;
+
     default:
       return false;
   }
@@ -593,12 +619,7 @@ int rexp_binlen(REXP *rx)
       len = cvector_size((double *)rx->data) * 8;
       break;
 
-    case XT_ARRAY_BOOL:
-      len = cvector_size((char *)rx->data) + 4;
-      if ((len & 3) > 0) len = len - (len & 3) + 4;
-      break;
-
-    case XT_RAW:
+    case XT_ARRAY_BOOL: case XT_RAW:
       len = cvector_size((char *)rx->data) + 4;
       if ((len & 3) > 0) len = len - (len & 3) + 4;
       break;

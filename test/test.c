@@ -40,18 +40,30 @@ int main(void)
   printf("NULL return:\n");
   rexp_print(&rx);
   rexp_clear(&rx);
+  */
   
+  //Doubles
   if ((ret = rserve_eval(&conn, "c(NA, rnorm(5))", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
-    printf("Failed to evaluate vector of doubles\n");
+    printf("FAIL: double encoding roundtrip\n");
     return 1;
   }
-  printf("Vector of doubles:\n");
-  rexp_print(&rx);
+  if ((ret = rserve_assign(&conn, "my_double", &rx)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(ret));
+    printf("FAIL: double encoding roundtrip\n");
+    return 1;
+  }
+  if ((ret = rserve_eval(&conn, "my_double", &ry)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(ret));
+    printf("FAIL: double encoding roundtrip\n");
+    return 1;
+  }
+  assert(rexp_equals(&rx, &ry));
+  printf("PASS: double encoding roundtrip\n");
   rexp_clear(&rx);
+  rexp_clear(&ry);
 
-  */
-
+  // Integers
   if ((ret = rserve_eval(&conn, "as.integer(c(1:5, NA, 7))", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
     printf("FAIL: integer encoding roundtrip\n");
@@ -72,25 +84,49 @@ int main(void)
   rexp_clear(&rx);
   rexp_clear(&ry);
 
-  /*
+  // Logicals
   if ((ret = rserve_eval(&conn, "c(TRUE, FALSE, NA, TRUE, TRUE)", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
-    printf("Failed to evaluate vector of logical\n");
+    printf("FAIL: logicals encoding roundtrip\n");
     return 1;
   }
-  printf("Vector of logical:\n");
-  rexp_print(&rx);
+  if ((ret = rserve_assign(&conn, "my_logical", &rx)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(ret));
+    printf("FAIL: logicals encoding roundtrip\n");
+    return 1;
+  }
+  if ((ret = rserve_eval(&conn, "my_logical", &ry)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(ret));
+    printf("FAIL: logicals encoding roundtrip\n");
+    return 1;
+  }
+  assert(rexp_equals(&rx, &ry));
+  printf("PASS: logicals encoding roundtrip\n");
   rexp_clear(&rx);
+  rexp_clear(&ry);
 
+  //Raw
   if ((ret = rserve_eval(&conn, "charToRaw('a b c')", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
-    printf("Failed to evaluate vector of raw\n");
+    printf("FAIL: raw encoding roundtrip\n");
     return 1;
   }
-  printf("Vector of raw:\n");
-  rexp_print(&rx);
+  if ((ret = rserve_assign(&conn, "my_raw", &rx)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(ret));
+    printf("FAIL: raw encoding roundtrip\n");
+    return 1;
+  }
+  if ((ret = rserve_eval(&conn, "my_raw", &ry)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(ret));
+    printf("FAIL: raw encoding roundtrip\n");
+    return 1;
+  }
+  assert(rexp_equals(&rx, &ry));
+  printf("PASS: raw encoding roundtrip\n");
   rexp_clear(&rx);
+  rexp_clear(&ry);
 
+  /*
   if ((ret = rserve_eval(&conn, "c('abra', NA, 'ca', 'dabra', '')", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
     printf("Failed to evaluate vector of strings\n");

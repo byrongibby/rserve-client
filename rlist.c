@@ -6,7 +6,7 @@
 #include "rlist.h"
 #include "strings.h"
 
-/* Custom destructor for vector of string */
+/* Custom destructor for cvector of string */
 static void free_string(void *str)
 {
   if (str) {
@@ -120,6 +120,7 @@ int rlist_put(RList* rl, char *name, REXP value)
   if (!rl->names)
     cvector_init(rl->names, cvector_capacity(rl->values), free_string);
   rl->names[cvector_size(rl->names) - 1] = name;
+
   return ret;
 }
 
