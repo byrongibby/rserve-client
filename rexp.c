@@ -606,7 +606,7 @@ bool rexp_equals(REXP *rx, REXP *ry)
         x = rlist_at(xl, i);
         y = rlist_at(yl, i);
         if (!rexp_equals(x, y)) return false;
-        if (rx->type ==  XT_LANG_TAG || rx->type ==  XT_LANG_TAG) {
+        if (rx->type ==  XT_LIST_TAG || rx->type ==  XT_LANG_TAG) {
           sx = rlist_name_at(xl, i);
           sy = rlist_name_at(yl, i);
           if (sx == NULL || sy == NULL) {
@@ -674,7 +674,7 @@ int rexp_binlen(REXP *rx)
       for (size_t i = 0; i < rlist_size(rx->data); ++i) {
         REXP *x = rlist_at(rx->data, i);
         len += (x == NULL) ? 4 : rexp_binlen(x);
-        if (rx->type ==  XT_LANG_TAG || rx->type ==  XT_LANG_TAG) {
+        if (rx->type ==  XT_LANG_TAG || rx->type ==  XT_LIST_TAG) {
           char *s = rlist_name_at(rx->data, i);
           len += 4; // header for a symbol
           len += (s == NULL) ? 1 : strlen(s) + 1;
@@ -696,17 +696,13 @@ int rexp_encode(REXP *rx, char *buf, int rxo, int len)
 {
   assert(rx);
 
-  int attrlen, stringlen, rxs = rxo, rxi;
-  bool is_large = len > 0xfffff0;
+  int hdrlen = (len > 0xfffff0) ? 8 : 4, stringlen, start = rxo, rxi;
 
-  set_hdr(rx->type | (rx->attr ? XT_HAS_ATTR : 0), len - (is_large ? 8 : 4), buf, rxo);
+  set_hdr(rx->type | (rx->attr ? XT_HAS_ATTR : 0), len - hdrlen, buf, rxo);
 
-  rxo += is_large ? 8 : 4;
+  rxo += hdrlen;
 
-  if (rx->attr) {
-    attrlen = rexp_binlen(rx->attr);
-    rxo += rexp_encode(rx->attr, buf, rxo, attrlen);
-  }
+  if (rx->attr) rxo = rexp_encode(rx->attr, buf, rxo, rexp_binlen(rx->attr));
 
   switch (rx->type) {
     case XT_NULL:
@@ -735,7 +731,7 @@ int rexp_encode(REXP *rx, char *buf, int rxo, int len)
         b = ((char *)rx->data)[i];
         buf[rxi++] = b == NA ? 2 : (b == FALSE ? 0 : 1);
       }
-      while ((rxi & 3) != 0) buf[rxi++] = 3;
+      while ((rxi & 3) != 0) buf[rxi++] = 0xff;
       break;
 
     case XT_RAW:
@@ -768,7 +764,7 @@ int rexp_encode(REXP *rx, char *buf, int rxo, int len)
       memcpy(buf + rxi, string, stringlen);
       rxi += stringlen;
       buf[++rxi] = 0;
-      while ((rxi & 3) != 0) buf[rxi++] = 3;
+      while ((rxi & 3) != 0) buf[rxi++] = 0;
       break;
 
     case XT_LANG_TAG: case XT_LANG_NOTAG:
@@ -792,5 +788,5 @@ int rexp_encode(REXP *rx, char *buf, int rxo, int len)
       return -1;
   }
 
-  return rxs + len;
+  return start + len;
 }
