@@ -290,7 +290,7 @@ int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
 
   set_hdr(DT_SEXP, rl, rq.data, 0);
 
-  if (rexp_encode(rx, rq.data, rq.size - rl) != 0) {
+  if (rexp_encode(rx, rq.data, rq.size - rl, rl) != 0) {
     fprintf(stderr, "ERROR: while encoding, failed to get binary representation\n");
     free(rq.data);
     return ENCODE_ERR;
@@ -623,7 +623,7 @@ int rserve_assign(RConnection *conn, char *sym, REXP *rx)
 
   set_hdr(DT_SEXP, rl, rq.data, sl + 4);
 
-  if ((ret = rexp_encode(rx, rq.data, rq.size - rl)) < 0) {
+  if ((ret = rexp_encode(rx, rq.data, rq.size - rl, rl)) < 0) {
     fprintf(stderr, "ERROR: while encoding, failed to get binary representation\n");
     free(rq.data);
     return ret;

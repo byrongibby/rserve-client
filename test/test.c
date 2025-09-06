@@ -147,16 +147,26 @@ int main(void)
   rexp_clear(&rx);
   rexp_clear(&ry);
 
-  /*
-  if((ret = rserve_eval(&conn, "list(foo = list(1L, 'Z', FALSE), 'bar' = pi, 'baz')", &rx)) != 0) {
+  // Vector
+  if ((ret = rserve_eval(&conn, "list(foo = list(1L, 'Z', FALSE), 'bar' = pi, 'baz')", &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
-    printf("Failed to evaluate generic vector\n");
+    printf("FAIL: vector encoding roundtrip\n");
     return 1;
   }
-  printf("Generic vector (named list):\n");
-  rexp_print(&rx);
+  if ((ret = rserve_assign(&conn, "my_vec", &rx)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(ret));
+    printf("FAIL: vector encoding roundtrip\n");
+    return 1;
+  }
+  if ((ret = rserve_eval(&conn, "my_vec", &ry)) != 0) {
+    printf("Rserve error: %s\n", rserve_error(ret));
+    printf("FAIL: vector encoding roundtrip\n");
+    return 1;
+  }
+  assert(rexp_equals(&rx, &ry));
+  printf("PASS: vector encoding roundtrip\n");
   rexp_clear(&rx);
-  */
+  rexp_clear(&ry);
 
   rserve_disconnect(&conn);
 

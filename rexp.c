@@ -39,7 +39,7 @@ void rexp_clear(REXP *rx)
 
   if (rx->attr) rexp_free(rx->attr);
 
-  switch(rx->type) {
+  switch (rx->type) {
     case XT_ARRAY_DOUBLE:
       cvector_free((double *)rx->data);
       break;
@@ -130,7 +130,7 @@ int rexp_decode(REXP *rx, char *buf, int rxo)
     rxo = rexp_decode(rx->attr, buf, rxo);
   }
 
-  switch(rx->type) {
+  switch (rx->type) {
     case XT_NULL:
       break;
 
@@ -320,7 +320,7 @@ char *rexp_to_string(REXP *rx, char *sep)
   size_t seplen = strlen(sep), len = 100 + seplen, capacity = 10 * len, size = 0;
   char *string;
 
-  switch(rx->type) {
+  switch (rx->type) {
     case XT_NULL:
       string = calloc(capacity, sizeof(char));
       if (string) {
@@ -545,7 +545,7 @@ bool rexp_equals(REXP *rx, REXP *ry)
 
   if (rx->type != ry->type) return false;
 
-  switch(rx->type) {
+  switch (rx->type) {
     case XT_NULL:
       break;
 
@@ -595,17 +595,27 @@ bool rexp_equals(REXP *rx, REXP *ry)
       }
       break;
 
-    case XT_LIST_NOTAG:
-    case XT_LANG_NOTAG:
-    case XT_VECTOR:
-    case XT_VECTOR_EXP:
-      break;
-
-    case XT_LIST_TAG:
-    case XT_LANG_TAG:
-      break;
-
-    case XT_UNKNOWN:
+    case XT_LIST_TAG: case XT_LIST_NOTAG:
+    case XT_LANG_TAG: case XT_LANG_NOTAG:
+    case XT_VECTOR: case XT_VECTOR_EXP:
+      char *sx, *sy;
+      REXP *x, *y;
+      RList *xl = (RList *)rx->data, *yl = (RList *)ry->data;
+      if (rlist_size(xl) != rlist_size(xl)) return false;
+      for (size_t i = 0; i < rlist_size(xl); ++i) {
+        x = rlist_at(xl, i);
+        y = rlist_at(yl, i);
+        if (!rexp_equals(x, y)) return false;
+        if (rx->type ==  XT_LANG_TAG || rx->type ==  XT_LANG_TAG) {
+          sx = rlist_name_at(xl, i);
+          sy = rlist_name_at(yl, i);
+          if (sx == NULL || sy == NULL) {
+            if (sx != NULL || sy != NULL) return false;
+          } else {
+            if (strcmp(sx, sy) != 0) return false;
+          }
+        }
+      }
       break;
 
     default:
@@ -620,8 +630,10 @@ int rexp_binlen(REXP *rx)
   assert(rx);
 
   int len = 0;
+
   if (rx->attr) len += rexp_binlen(rx->attr);
-  switch(rx->type) {
+
+  switch (rx->type) {
     case XT_NULL:
       break;
 
@@ -672,25 +684,31 @@ int rexp_binlen(REXP *rx)
       if ((len & 3) > 0) len = len - (len & 3) + 4;
       break;
 
-    case XT_UNKNOWN:
+    default:
       break;
   }
 
-  return (len > 0xfffff0) ? len + 8 : len + 4; // add the header
+  // Return len after adding space for the expression header
+  return (len > 0xfffff0) ? len + 8 : len + 4;
 }
 
-int rexp_encode(REXP *rx, char *buf, int rxo) 
+int rexp_encode(REXP *rx, char *buf, int rxo, int len) 
 {
   assert(rx);
 
-  int len = rexp_binlen(rx), rxs = rxo, rxi;
-  bool has_attr = false, is_large = len > 0xfffff0;
+  int attrlen, stringlen, rxs = rxo, rxi;
+  bool is_large = len > 0xfffff0;
 
-  set_hdr(rx->type | (has_attr ? XT_HAS_ATTR : 0), len - (is_large ? 8 : 4), buf, rxo);
+  set_hdr(rx->type | (rx->attr ? XT_HAS_ATTR : 0), len - (is_large ? 8 : 4), buf, rxo);
 
   rxo += is_large ? 8 : 4;
 
-  switch(rx->type) {
+  if (rx->attr) {
+    attrlen = rexp_binlen(rx->attr);
+    rxo += rexp_encode(rx->attr, buf, rxo, attrlen);
+  }
+
+  switch (rx->type) {
     case XT_NULL:
       break;
 
@@ -728,16 +746,15 @@ int rexp_encode(REXP *rx, char *buf, int rxo)
       break;
 
     case XT_ARRAY_STR:
-      int sl;
       char **strings = (char **)rx->data;
       rxi = rxo;
       for (size_t i = 0; i < cvector_size(strings); ++i) {
         if (strings[i] == NULL) {
           buf[rxi++] = -1;
         } else {
-          sl = strlen(strings[i]);
-          memcpy(buf + rxi, strings[i], sl);
-          rxi += sl;
+          stringlen = strlen(strings[i]);
+          memcpy(buf + rxi, strings[i], stringlen);
+          rxi += stringlen;
         }
         buf[rxi++] = 0;
       }
@@ -745,15 +762,34 @@ int rexp_encode(REXP *rx, char *buf, int rxo)
       break;
 
    case XT_STR: case XT_SYMNAME:
+      char *string = rx->data ? rx->data : "";
+      rxi = rxo;
+      stringlen = strlen(string);
+      memcpy(buf + rxi, string, stringlen);
+      rxi += stringlen;
+      buf[++rxi] = 0;
+      while ((rxi & 3) != 0) buf[rxi++] = 3;
       break;
 
     case XT_LANG_TAG: case XT_LANG_NOTAG:
     case XT_LIST_TAG: case XT_LIST_NOTAG:
     case XT_VECTOR: case XT_VECTOR_EXP:
+      RList *list = rx->data;
+      REXP *x;
+      rxi = rxo;
+      for (size_t i = 0; i < rlist_size(list); ++i) {
+        x = rlist_at(list, i);
+        if (x == NULL) x = &(REXP) { XT_NULL, 0, 0 };
+        rxi = rexp_encode(x, buf, rxi, rexp_binlen(x));
+        if (rx->type == XT_LANG_TAG ||rx->type == XT_LIST_TAG) {
+          x = &(REXP) { XT_SYMNAME, rlist_name_at(list, i), 0 };
+          rxi = rexp_encode(x, buf, rxi, rexp_binlen(x));
+        }
+      }
       break;
 
-    case XT_UNKNOWN:
-      break;
+    default:
+      return -1;
   }
 
   return rxs + len;
