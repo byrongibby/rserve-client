@@ -576,9 +576,23 @@ bool rexp_equals(REXP *rx, REXP *ry)
       break;
 
     case XT_ARRAY_STR:
+      char **xs = (char **)rx->data, **ys = (char **)ry->data;
+      if (cvector_size(xs) != cvector_size(ys)) return false;
+      for (size_t i = 0; i < cvector_size(xs); ++i) {
+        if (xs[i] == NULL || ys[i] == NULL) {
+          if (xs[i] != NULL || ys[i] != NULL) return false;
+        } else {
+          if (strcmp(xs[i], ys[i]) != 0) return false;
+        }
+      }
       break;
 
     case XT_STR: case XT_SYMNAME:
+      if (rx->data == NULL || ry->data == NULL) {
+        if (rx->data != NULL || ry->data != NULL) return false;
+      } else {
+        if (strcmp((char *)rx->data, (char *)rx->data) != 0) return false;
+      }
       break;
 
     case XT_LIST_NOTAG:
@@ -625,11 +639,14 @@ int rexp_binlen(REXP *rx)
       break;
 
     case XT_ARRAY_STR:
+      char **strings = (char **)rx->data;
       for (size_t i = 0; i < cvector_size((char **)rx->data); ++i) {
-        if(strlen(((char **)rx->data)[i]) > 0) {
-          if (((char **)rx->data)[i][0] == -1) len++;
-          len += strlen(((char **)rx->data)[i]); //FIXME: Need to  + 1 ??
+        if (strings[i] == NULL) {
+          len++;
+        } else {
+          len += strlen(strings[i]);
         }
+        len++;
       }
       if ((len & 3) > 0) len = len - (len & 3) + 4;
       break;
@@ -711,14 +728,16 @@ int rexp_encode(REXP *rx, char *buf, int rxo)
       break;
 
     case XT_ARRAY_STR:
+      int sl;
       char **strings = (char **)rx->data;
       rxi = rxo;
       for (size_t i = 0; i < cvector_size(strings); ++i) {
-        if (strings[i] != NULL) {
-          memcpy(buf + rxi, strings[i], strlen(strings[i]));
-          rxi += strlen(strings[i]);
-        } else {
+        if (strings[i] == NULL) {
           buf[rxi++] = -1;
+        } else {
+          sl = strlen(strings[i]);
+          memcpy(buf + rxi, strings[i], sl);
+          rxi += sl;
         }
         buf[rxi++] = 0;
       }
