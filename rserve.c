@@ -290,7 +290,7 @@ int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
 
   set_hdr(DT_SEXP, rl, rq.data, 0);
 
-  if (rexp_encode(rx, rq.data, rq.size - rl, rl) != 0) {
+  if (rexp_encode(rx, rq.data, rq.size - rl, rl) < 0) {
     fprintf(stderr, "ERROR: while encoding, failed to get binary representation\n");
     free(rq.data);
     return ENCODE_ERR;
@@ -332,7 +332,10 @@ int init_ocap(RConnection *conn, Buffer *hdr)
   conn->connected = true;
 
   int ret = 0;
-  RPacket rp = { 0, 0, NULL };
+  RPacket rp = { 0 };
+
+  //FIXME: ErrNo, not free'd!
+  conn->capabilities = calloc(1, sizeof(REXP));
 
   if ((ret = response_hdr(conn, hdr, &rp)) != 0) return ret;
   if ((ret = parse_response(&rp, conn->capabilities)) != 0) return ret;

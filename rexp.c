@@ -468,9 +468,6 @@ char *rexp_to_string(REXP *rx, char *sep)
 
     case XT_LANG_TAG: case XT_LANG_NOTAG:
     case XT_LIST_TAG: case XT_LIST_NOTAG:
-      //FIXME: Implement!
-      break;
-
     case XT_VECTOR: case XT_VECTOR_EXP:
       char *tmp, *name, *value;
       cvector(char *) strings = NULL;
