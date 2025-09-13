@@ -25,9 +25,6 @@ REXP create_call(REXP *capability, REXP *args, size_t nargs) {
   rlist_add(rl, ocap);
   for (size_t i = 0; i < nargs; ++i) rlist_add(rl, args[i]);
 
-  //FIXME: replace with rexp_copy(&ocap, &capability)
-  //*capability = (REXP) { XT_NULL, 0, 0 };
-
   call.type = XT_LANG_NOTAG;
   call.data = rl;
 

@@ -73,7 +73,7 @@ void rexp_clear(REXP *rx)
     }
   }
 
-  *rx = (REXP) { XT_NULL, NULL, NULL};
+  *rx = (REXP) { XT_NULL, NULL, NULL };
 }
 
 REXP *rexp_copy(REXP *ry, REXP *rx)
@@ -119,8 +119,8 @@ REXP *rexp_copy(REXP *ry, REXP *rx)
       break;
 
     case XT_ARRAY_STR:
-      // Manually copy strings after initialising cvector 
-      // and setting to the correct size
+      // Manually copy strings after initialising cvector and
+      // setting it to the correct size
       char **x_strings = rx->data, **y_strings = NULL; 
       cvector_init(y_strings, cvector_capacity(x_strings), free_string);
       if (y_strings == NULL) return NULL;
@@ -436,7 +436,8 @@ char *rexp_to_string(REXP *rx, char *sep)
   assert(sep);
 
   size_t seplen = strlen(sep), len = 100 + seplen, capacity = 10 * len, size = 0;
-  char *string;
+  char *string = NULL;
+  cvector(char *) strings = NULL;
 
   //FIXME: attr to string, and strcat at end
 
@@ -553,27 +554,44 @@ char *rexp_to_string(REXP *rx, char *sep)
       }
       break;
 
-    //FIXME: improve to handle arbitrarily long strings
     case XT_ARRAY_STR:
-      char *s;
-      string = calloc(capacity, sizeof(char));
-      if (string) {
-        cvector(char *) strings = rx->data;
-        s = strings[0] ? (strings[0][0] ? strings[0] : "EMPTY") : "NA";
-        snprintf(string, len, "%s", s);
-        size = strlen(string);
-        for (size_t i = 1; i < cvector_size(strings); ++i) {
-          if (capacity - size < len + strlen(sep)) {
-            if ((string = realloc(string, capacity *= 2))) {
-              memset(string + capacity / 2, 0, capacity);
-            } else {
-              break;
-            }
+      strings = rx->data;
+      size = 0;
+      if (cvector_size(strings) > 0) {
+        size += (strings[0] && strings[0][0]) ? strlen(strings[0]) : 0;
+        size += 2;
+      }
+      for (size_t i = 1; i < cvector_size(strings); ++i) {
+        size += strlen(sep);
+        size += (strings[0] && strings[0][0]) ? strlen(strings[0]) : 0;
+        size += 2;
+      }
+      string = calloc(size + 1, sizeof(char));
+      if (cvector_size(strings) > 0) {
+        if (strings[0]) {
+          if (strings[0][0]) {
+            strcat(string, "\"");
+            strcat(string, strings[0]);
+            strcat(string, "\"");
+          } else {
+            strcat(string, "\"\"");
           }
-          strcat(string, sep);
-          s = strings[i] ? (strings[i][0] ? strings[i] : "EMPTY") : "NA";
-          snprintf(string + strlen(string), len, "%s", s);
-          size = strlen(string);
+        } else {
+          strcat(string, "NA");
+        }
+      }
+      for (size_t i = 1; i < cvector_size(strings); ++i) {
+        strcat(string, sep);
+        if (strings[i]) {
+          if (strings[i][0]) {
+            strcat(string, "\"");
+            strcat(string, strings[i]);
+            strcat(string, "\"");
+          } else {
+            strcat(string, "\"\"");
+          }
+        } else {
+          strcat(string, "NA");
         }
       }
       break;
@@ -590,13 +608,12 @@ char *rexp_to_string(REXP *rx, char *sep)
     case XT_LIST_TAG: case XT_LIST_NOTAG:
     case XT_VECTOR: case XT_VECTOR_EXP:
       char *tmp, *name, *value;
-      cvector(char *) strings = NULL;
 
       cvector_init(strings, 10, free_string);
       size = 0;
 
       if (rlist_has_names(rx->data)) {
-        for (size_t i = 0; i < rlist_size(rx->data); i++) {
+        for (size_t i = 0; i < rlist_size(rx->data); ++i) {
           tmp = rlist_name_at(rx->data, i);
           if (tmp == NULL || *tmp == '\0') {
             name = calloc(100, sizeof(char));
@@ -614,7 +631,7 @@ char *rexp_to_string(REXP *rx, char *sep)
           size += strlen(name) + strlen(value) + 2;
         }
       } else {
-        for (size_t i = 0; i < rlist_size(rx->data); i++) {
+        for (size_t i = 0; i < rlist_size(rx->data); ++i) {
           name = calloc(100, sizeof(char));
           sprintf(name, "[[%lu]]", i + 1);
           cvector_push_back(strings, name);
