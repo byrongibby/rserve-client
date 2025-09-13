@@ -39,40 +39,158 @@ void rexp_clear(REXP *rx)
 
   if (rx->attr) rexp_free(rx->attr);
 
-  switch (rx->type) {
-    case XT_ARRAY_DOUBLE:
-      cvector_free((double *)rx->data);
-      break;
-    case XT_ARRAY_INT:
-      cvector_free((int *)rx->data);
-      break;
-    case XT_ARRAY_BOOL:
-      cvector_free((char *)rx->data);
-      break;
-    case XT_RAW:
-      cvector_free((char *)rx->data);
-      break;
-    case XT_ARRAY_STR:
-      cvector_free((char **)rx->data);
-      break;
-    case XT_STR: case XT_SYMNAME:
-      free((char *)rx->data);
-      break;
-    case XT_LANG_TAG: case XT_LANG_NOTAG:
-    case XT_LIST_TAG: case XT_LIST_NOTAG:
-      rlist_free((RList *)rx->data);
-      break;
-    case XT_VECTOR: case XT_VECTOR_EXP:
-      rlist_free((RList *)rx->data);
-      break;
-    case XT_UNKNOWN:
-      break;
-    case XT_NULL:
-      break;
+  if (rx->data) {
+    switch (rx->type) {
+      case XT_ARRAY_DOUBLE:
+        cvector_free((double *)rx->data);
+        break;
+      case XT_ARRAY_INT:
+        cvector_free((int *)rx->data);
+        break;
+      case XT_ARRAY_BOOL:
+        cvector_free((char *)rx->data);
+        break;
+      case XT_RAW:
+        cvector_free((char *)rx->data);
+        break;
+      case XT_ARRAY_STR:
+        cvector_free((char **)rx->data);
+        break;
+      case XT_STR: case XT_SYMNAME:
+        free((char *)rx->data);
+        break;
+      case XT_LANG_TAG: case XT_LANG_NOTAG:
+      case XT_LIST_TAG: case XT_LIST_NOTAG:
+        rlist_free((RList *)rx->data);
+        break;
+      case XT_VECTOR: case XT_VECTOR_EXP:
+        rlist_free((RList *)rx->data);
+        break;
+      case XT_UNKNOWN:
+        break;
+      case XT_NULL:
+        break;
+    }
   }
 
   *rx = (REXP) { XT_NULL, NULL, NULL};
 }
+
+REXP *rexp_copy(REXP *ry, REXP *rx)
+{
+  assert(rx);
+  assert(ry);
+
+  int len;
+
+  if (rx->attr) {
+    if ((ry->attr = malloc(sizeof(REXP))) == NULL) return NULL;
+    if (rexp_copy(ry->attr, rx->attr) == NULL) {
+      free(ry->attr);
+      return NULL;
+    }
+  } else {
+    ry->attr = NULL;
+  }
+
+  switch (rx->type) {
+    case XT_NULL:
+      break;
+
+    case XT_ARRAY_INT:
+      int *x_ints = rx->data, *y_ints = NULL;
+      cvector_copy(x_ints, y_ints);
+      if (y_ints == NULL) return NULL;
+      ry->data = y_ints;
+      break;
+
+    case XT_ARRAY_DOUBLE:
+      double *x_doubles = rx->data, *y_doubles = NULL;
+      cvector_copy(x_doubles, y_doubles);
+      if (y_doubles == NULL) return NULL;
+      ry->data = y_doubles;
+      break;
+
+    case XT_ARRAY_BOOL: case XT_RAW:
+      char *x_bytes = rx->data, *y_bytes = NULL;
+      cvector_copy(x_bytes, y_bytes);
+      if (y_bytes == NULL) return NULL;
+      ry->data = y_bytes;
+      break;
+
+    case XT_ARRAY_STR:
+      // Manually copy strings after initialising cvector 
+      // and setting to the correct size
+      char **x_strings = rx->data, **y_strings = NULL; 
+      cvector_init(y_strings, cvector_capacity(x_strings), free_string);
+      if (y_strings == NULL) return NULL;
+      cvector_resize(y_strings, cvector_size(x_strings), NULL);
+      for (size_t i = 0; i < cvector_size(y_strings); ++i) {
+        len = strlen(x_strings[i]);
+        if ((y_strings[i] = calloc(len + 1, sizeof(char)))) {
+          memcpy(y_strings[i], x_strings[i], len);
+        } else {
+          fprintf(stderr, "WARN: while copying array of strings rexp, ");
+          fprintf(stderr, "failed to alloc memory, strings[%lu] not set\n", i);
+        }
+      }
+      ry->data = y_strings;
+      break;
+
+    case XT_STR: case XT_SYMNAME:
+      char *x_string = rx->data, *y_string = ry->data; 
+      len = strlen(x_string);
+      if((y_string = calloc(len + 1, sizeof(char))) == NULL) return NULL;
+      memcpy(y_string, x_string, len);
+      if (y_string == NULL) return NULL;
+      break;
+
+    case XT_LIST_NOTAG: case XT_LIST_TAG:
+    case XT_LANG_NOTAG: case XT_LANG_TAG:
+    case XT_VECTOR: case XT_VECTOR_EXP:
+      // Manually copy names and values after setting cvector to the correct
+      // size - rlist_init() takes care of the initialisation
+      char **y_names, **x_names;
+      REXP *y_values, *x_values, null_value = { 0 };
+      len = rlist_size(rx->data);
+      if ((ry->data = malloc(sizeof(RList))) == NULL) return NULL;
+      if (!rlist_has_names(rx->data)) {
+        if (rlist_init(ry->data, len, false) != 0) return NULL;
+      } else {
+        if (rlist_init(ry->data, len, true) != 0) return NULL;
+        y_names = ((RList *)ry->data)->names;
+        x_names = ((RList *)rx->data)->names;
+        cvector_resize(y_names, cvector_size(x_names), NULL);
+        for (size_t i = 0; i < cvector_size(y_names); ++i) {
+          len = strlen(x_names[i]);
+          if ((y_names[i] = calloc(len + 1, sizeof(char)))) {
+            memcpy(y_names[i], x_names[i], len);
+          } else {
+            fprintf(stderr, "WARN: while copying names in list/vector rexp, ");
+            fprintf(stderr, "failed to alloc memory, names[%lu] not set\n", i);
+          }
+        }
+      }
+      y_values = ((RList *)ry->data)->values;
+      x_values = ((RList *)rx->data)->values;
+      cvector_resize(y_values, cvector_size(x_values), null_value);
+      for (size_t i = 0; i < cvector_size(y_values); ++i) {
+        rexp_copy(y_values + i, x_values + i);
+      }
+      break;
+
+    case XT_UNKNOWN:
+      return NULL;
+
+    default:
+      return NULL;
+  }
+
+  ry->type = rx->type;
+
+  return ry;
+}
+
 
 bool rexp_is_vector(REXP *rx)
 {
@@ -319,6 +437,8 @@ char *rexp_to_string(REXP *rx, char *sep)
 
   size_t seplen = strlen(sep), len = 100 + seplen, capacity = 10 * len, size = 0;
   char *string;
+
+  //FIXME: attr to string, and strcat at end
 
   switch (rx->type) {
     case XT_NULL:

@@ -330,15 +330,13 @@ int init_ocap(RConnection *conn, Buffer *hdr)
   conn->rsrv_ver = 103;
   conn->is_ocap = true;
   conn->connected = true;
+  conn->capabilities = (REXP) { XT_NULL, NULL, NULL};
 
   int ret = 0;
   RPacket rp = { 0 };
 
-  //FIXME: ErrNo, not free'd!
-  conn->capabilities = calloc(1, sizeof(REXP));
-
   if ((ret = response_hdr(conn, hdr, &rp)) != 0) return ret;
-  if ((ret = parse_response(&rp, conn->capabilities)) != 0) return ret;
+  if ((ret = parse_response(&rp, &conn->capabilities)) != 0) return ret;
 
   rpacket_clear(&rp);
 
@@ -365,7 +363,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
   conn->plaintext = false;
   conn->is_ocap = false;
   conn->rsrv_ver = 0;
-  conn->capabilities = NULL;
+  conn->capabilities = (REXP) { XT_NULL, NULL, NULL};
 
   errno = 0;
 
@@ -471,6 +469,8 @@ int rserve_disconnect(RConnection* conn)
   assert(conn != NULL);
 
   int ret = 0;
+
+  if (conn->is_ocap) rexp_clear(&conn->capabilities);
 
   fprintf(stderr, "INFO: disconnecting from server\n");
 
@@ -675,6 +675,8 @@ int rserve_shutdown(RConnection *conn)
     rpacket_clear(&rp);
     return ret;
   }
+
+  //FIXME: disconnect?
 
   rpacket_clear(&rp);
 

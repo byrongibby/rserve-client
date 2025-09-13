@@ -72,7 +72,7 @@ typedef struct {
   bool plaintext;
   int rsrv_ver;
   bool is_ocap;
-  REXP *capabilities; //FIXME: Where to free?
+  REXP capabilities;
 } RConnection;
 
 int rserve_connect(RConnection *conn, char *host, int port);

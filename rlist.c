@@ -43,6 +43,7 @@ void rlist_free(RList* rl) {
 
   if (rl->names) cvector_free(rl->names);
   if (rl->values) cvector_free(rl->values);
+
   free(rl);
 }
 

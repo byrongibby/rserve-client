@@ -48,6 +48,7 @@ typedef struct REXP {
 
 void rexp_free(REXP *rx);
 void rexp_clear(REXP *rx);
+REXP *rexp_copy(REXP *ry, REXP *rx);
 bool rexp_is_string(REXP *rx);
 bool rexp_is_vector(REXP *rx);
 bool rexp_is_list(REXP *rx);
