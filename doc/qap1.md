@@ -5,9 +5,10 @@
 [QAP1 (quad attributes protocol v1)](https://rforge.net/Rserve/dev.html) is a message oriented protocol, i.e. the initiating side (here the client) sends a message and awaits a response. The message contains both the action to be taken and any necessary data. The response contains a response code and any associated data. Every message consists of a header and data part (which can be empty). The header is structured as follows:
 
 ```
-(data type | is large?) length of message (4-8 bytes)
-(expression type | has attribute? | is long?) length of expression (4-8 bytes)
-expression data (multiple of 4 bytes)
+  [0]  (int) command
+  [4]  (int) length of the message (bits 0-31)
+  [8]  (int) offset of the data part
+  [12] (int) length of the message (bits 32-63)
 ```
 
 ## Example
@@ -16,10 +17,18 @@ expression data (multiple of 4 bytes)
 list(foo = list(1L, 'Z', FALSE), 'bar' = pi, 'baz')
 ```
 
+The data part looks something like this
+
+```
+(data type | is large?) length of message (4-8 bytes)
+(expression type | has attribute? | is long?) length of expression (4-8 bytes)
+expression data (multiple of 4 bytes)
+```
+
 Notice the padding for arrays of strings and logicals used to maintain a length that is a multiple of 4 bytes.
 
 ```
-# Message header
+# Parameter header
 0a 58 00 00 (DT_SEXP) 88
 
 # Vector expression header
