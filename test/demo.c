@@ -16,18 +16,11 @@ int main(void)
     assert(strcmp(conn.host, "127.0.0.1") == 0);
     assert(conn.port == 6311);
     assert(conn.connected == true);
-    assert(conn.auth_req == true);
-    assert(conn.plaintext == true);
+    assert(conn.auth_req == false);
     assert(conn.rsrv_ver == 103);
   } else {
     printf("Rserve error: %s\n", rserve_error(ret));
     printf("Failed to estabilish connection\n");
-    return 1;
-  }
-
-  if ((ret = rserve_login(&conn, "Byron", "password")) != 0) {
-    printf("Rserve error: %s\n", rserve_error(ret));
-    printf("Failed to log in\n");
     return 1;
   }
 

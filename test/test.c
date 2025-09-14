@@ -25,7 +25,7 @@ int main(void)
     return 1;
   }
 
-  if ((ret = rserve_login(&conn, "Byron", "password")) != 0) {
+  if ((ret = rserve_login(&conn, "mike", "mypwd")) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
     printf("Failed to log in\n");
     return 1;

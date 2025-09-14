@@ -424,6 +424,13 @@ int rexp_decode(REXP *rx, char *buf, int rxo)
     break;
 
   case XT_UNKNOWN:
+    fprintf(stderr, "WARN: while decoding REXP, unknown type.\n");
+    rxo = eox;
+    break;
+
+  default:
+    fprintf(stderr, "WARN: while decoding REXP, unimplemented type.\n");
+    rxo = eox;
     break;
   }
 
@@ -438,8 +445,6 @@ char *rexp_to_string(REXP *rx, char *sep)
   size_t seplen = strlen(sep), len = 100 + seplen, capacity = 10 * len, size = 0;
   char *string = NULL;
   cvector(char *) strings = NULL;
-
-  //FIXME: attr to string, and strcat at end
 
   switch (rx->type) {
     case XT_NULL:
@@ -656,9 +661,14 @@ char *rexp_to_string(REXP *rx, char *sep)
     case XT_UNKNOWN:
       string = calloc(capacity, sizeof(char));
       if (string) {
-        snprintf(string, len, "%s", "UNKNOWN");
+        snprintf(string, len, "%s", "Unkown type");
         size = strlen(string);
       }
+      break;
+
+    default:
+      fprintf(stderr, "WARN: while converting REXP to string, unimplemented type.\n");
+      string = calloc(1, sizeof(char));
       break;
   }
 
@@ -681,6 +691,7 @@ bool rexp_equals(REXP *rx, REXP *ry)
 
   switch (rx->type) {
     case XT_NULL:
+      if (ry->data) return false;
       break;
 
     case XT_ARRAY_DOUBLE:
@@ -752,7 +763,12 @@ bool rexp_equals(REXP *rx, REXP *ry)
       }
       break;
 
+    case XT_UNKNOWN:
+      fprintf(stderr, "WARN: while comparing REXPs, unknown type.\n");
+      return false;
+
     default:
+      fprintf(stderr, "WARN: while comparing REXPs, unimplemented type.\n");
       return false;
   }
 
@@ -818,8 +834,13 @@ int rexp_binlen(REXP *rx)
       if ((len & 3) > 0) len = len - (len & 3) + 4;
       break;
 
+    case XT_UNKNOWN:
+      fprintf(stderr, "WARN: while computing REXP bin length, unknown type.\n");
+      return len;
+
     default:
-      break;
+      fprintf(stderr, "WARN: while computing REXP bin length, unimplemented type.\n");
+      return len;
   }
 
   // Return len after adding space for the expression header
@@ -918,7 +939,12 @@ int rexp_encode(REXP *rx, char *buf, int rxo, int len)
       }
       break;
 
+    case XT_UNKNOWN:
+      fprintf(stderr, "ERROR: cannot encode REXP of type XT_UNKNOWN.\n");
+      return -1;
+
     default:
+      fprintf(stderr, "ERROR: cannot encode unimplemented REXP type.\n");
       return -1;
   }
 
