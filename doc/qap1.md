@@ -11,7 +11,7 @@
   [12] (int) length of the message (bits 32-63)
 ```
 
-## Example
+## Data part example
 
 ```
 list(foo = list(1L, 'Z', FALSE), 'bar' = pi, 'baz')
