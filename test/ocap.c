@@ -7,28 +7,14 @@
 #include "rexp.h"
 #include "rlist.h"
 #include "rserve.h"
+#include "utilities.h"
 
+/* Custom destructor for cvector of string
+ */
 void free_string(void *str) {
   if (str) {
     free(*(char **)str);
   }
-}
-
-REXP create_call(REXP *capability, REXP *args, size_t nargs) {
-  REXP call = { 0 }, ocap = { 0 };
-  RList *rl = malloc(sizeof(RList));
-
-  rlist_init(rl, nargs + 1, false);
-
-  rexp_copy(&ocap, capability);
-  
-  rlist_add(rl, ocap);
-  for (size_t i = 0; i < nargs; ++i) rlist_add(rl, args[i]);
-
-  call.type = XT_LANG_NOTAG;
-  call.data = rl;
-
-  return call;
 }
 
 int main(void)
@@ -54,7 +40,8 @@ int main(void)
   rexp_print(&conn.capabilities);
   rexp_print(conn.capabilities.attr);
 
-  // First argument (user) to auth function (capability)
+  /* First argument (user) to auth function (capability)
+   */
   memcpy(u, "mike", 5);
   cvector(char *) user = NULL;
   cvector_init(user, 1, free_string);
@@ -64,7 +51,8 @@ int main(void)
   args[0].data = user;
   args[0].attr = NULL;
 
-  // Second argument (pass) to auth function (capability)
+  /* Second argument (pass) to auth function (capability)
+   */
   memcpy(p, "mypwd", 6);
   cvector(char *) pass = NULL;
   cvector_init(pass, 1, free_string);
@@ -74,7 +62,8 @@ int main(void)
   args[1].data = pass;
   args[1].attr = NULL;
 
-  // Create ocap request from capability and arg REXPs
+  /* Create ocap request from capability and arg REXPs
+   */
   ocap = create_call(&conn.capabilities, args, 2);
 
   if ((ret = rserve_callocap(&conn, &ocap, &rx)) != 0) {
