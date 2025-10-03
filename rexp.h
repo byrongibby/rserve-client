@@ -10,9 +10,9 @@
 #define REXP_SUCCESS 0
 
 typedef enum {
-  FALSE = 0,
-  TRUE  = 1,
-  NA    = -128,
+  LGL_FALSE = 0,
+  LGL_TRUE  = 1,
+  LGL_NA    = -128,
 } RLogical;
 
 typedef enum

@@ -294,7 +294,7 @@ int rexp_decode(REXP *rx, char *buf, int rxo)
       cvector_reserve(logicals, size);
       char b;
       for (size_t i = rxo; i < rxo + size; ++i) {
-        b = (buf[i] == TRUE || buf[i] == FALSE) ? buf[i] : NA;
+        b = (buf[i] == LGL_TRUE || buf[i] == LGL_FALSE) ? buf[i] : LGL_NA;
         cvector_push_back(logicals, b);
       }
       rx->data = logicals;
@@ -509,9 +509,9 @@ char *rexp_to_string(REXP *rx, char *sep)
       string = calloc(capacity, sizeof(char));
       if (string) {
         cvector(char) logicals = rx->data;
-        if (TRUE == logicals[0]) {
+        if (LGL_TRUE == logicals[0]) {
           snprintf(string, len, "%s", "TRUE");
-        } else if (FALSE == logicals[0]) {
+        } else if (LGL_FALSE == logicals[0]) {
           snprintf(string, len, "%s", "FALSE");
         } else {
           snprintf(string, len, "%s", "NA");
@@ -526,9 +526,9 @@ char *rexp_to_string(REXP *rx, char *sep)
             }
           }
           strcat(string, sep);
-          if (TRUE == logicals[i]) {
+          if (LGL_TRUE == logicals[i]) {
             snprintf(string + strlen(string), len, "%s", "TRUE");
-          } else if (FALSE == logicals[i]) {
+          } else if (LGL_FALSE == logicals[i]) {
             snprintf(string + strlen(string), len, "%s", "FALSE");
           } else {
             snprintf(string + strlen(string), len, "%s", "NA");
@@ -884,7 +884,7 @@ int rexp_encode(REXP *rx, char *buf, int rxo, int len)
       rxi += 4;
       for (size_t i = 0; i < cvector_size(rx->data); ++i) {
         b = ((char *)rx->data)[i];
-        buf[rxi++] = b == NA ? 2 : (b == FALSE ? 0 : 1);
+        buf[rxi++] = b == LGL_NA ? 2 : (b == LGL_FALSE ? 0 : 1);
       }
       while ((rxi & 3) != 0) buf[rxi++] = 0xff;
       break;

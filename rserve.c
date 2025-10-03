@@ -14,7 +14,7 @@
 
 /* Utilities for working with raw byte arrays */
 
-int set_hdr(int32_t type, int32_t len, char* y, size_t o)
+int set_hdr(int32_t type, int32_t len, char *y, size_t o)
 {
   *(y + o) = (type & 0xff) | (len > 0xfffff0 ? DT_LARGE : 0);
   *(y + ++o) = len & 0xff;
@@ -29,14 +29,14 @@ int set_hdr(int32_t type, int32_t len, char* y, size_t o)
   return o;
 }
 
-char* new_hdr(int32_t type, int32_t len)
+char *new_hdr(int32_t type, int32_t len)
 {
   char *hdr = malloc(len > 0xfffff0 ? 8 : 4);
   set_hdr(type, len, hdr, 0);
   return hdr;
 }
 
-int get_len(char* y, size_t o)
+int get_len(char *y, size_t o)
 {
   return (*(y + o) & 0x40) > 0
     ?
@@ -50,7 +50,7 @@ int get_len(char* y, size_t o)
     (*(y + o + 3) & 0xff) << 16;
 }
 
-void set_int(int32_t x, char* y, size_t o)
+void set_int(int32_t x, char *y, size_t o)
 {
   *(y + o) = x & 0xff;
   *(y + ++o) = (x & 0xff00) >> 8;
@@ -58,7 +58,7 @@ void set_int(int32_t x, char* y, size_t o)
   *(y + ++o) = (x & 0xff000000) >> 24;
 }
 
-int get_int(char* y, size_t o)
+int get_int(char *y, size_t o)
 {
   return (*(y + o) & 0xff) |
     (*(y + o + 1) & 0xff) << 8 |
@@ -66,13 +66,13 @@ int get_int(char* y, size_t o)
     (*(y + o + 3) & 0xff) << 24;
 }
 
-void set_long(int64_t x, char* y, size_t o)
+void set_long(int64_t x, char *y, size_t o)
 {
   set_int((int)(x & 0xffffffffL), y, o);
   set_int((int)(x >> 32), y, o + 4);
 }
 
-long get_long(char* y, size_t o)
+long get_long(char *y, size_t o)
 {
   long low = ((long)get_int(y, o)) & 0xffffffffL;
   long hi = (((long)get_int(y, o + 4)) & 0xffffffffL) << 32;
@@ -150,10 +150,12 @@ typedef struct
 int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp) 
 {
   int n;
-  char data[16];
+  char *data = malloc(16);
 
   if (hdr == NULL) {
-    hdr = &(Buffer) { .data = data, .size = sizeof(data) };
+    hdr = malloc(sizeof(Buffer));
+    hdr->data = data;
+    hdr->size = 16;
     errno = 0;
     if ((n = read(conn->sockfd, hdr->data, hdr->size)) != 16) {
       if (n < 0) {
@@ -187,6 +189,9 @@ int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp)
     }
   }
 
+  free(hdr);
+  free(data);
+
   return 0;
 }
 
@@ -199,7 +204,7 @@ int request(RConnection* conn, int cmd, Buffer *prefix, Buffer *cont, int offset
     int len, RPacket *rp)
 {
   int contlen;
-  char hdr[16];
+  char hdr[16] = { 0 };
 
   if (cont != NULL) {
     if (offset >= cont->size) {
@@ -214,7 +219,6 @@ int request(RConnection* conn, int cmd, Buffer *prefix, Buffer *cont, int offset
   contlen = (cont == NULL) ? 0 : len;
   if (prefix != NULL && prefix->size > 0) contlen += prefix->size;
 
-	memset(hdr, 0, sizeof(hdr));
   set_int(cmd, hdr, 0);
   set_int(contlen, hdr, 4);
 
@@ -250,7 +254,7 @@ int request_cmd(RConnection *conn, int cmd, RPacket *rp)
   return request_bytes(conn, cmd, NULL, rp);
 }
 
-int request_string(RConnection *conn, int cmd, char* x, RPacket *rp)
+int request_string(RConnection *conn, int cmd, char *x, RPacket *rp)
 {
   int sl, ret;
   Buffer rq = { 0 };

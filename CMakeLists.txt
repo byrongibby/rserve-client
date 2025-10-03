@@ -9,8 +9,8 @@ project(rserve-client)
 ## LIBRARY
 ###########################################################
 
-add_library(rserve-client SHARED rserve.c rexp.c rlist.c)
-add_library(rserve-client-static STATIC rserve.c rexp.c rlist.c)
+add_library(rserve-client SHARED rserve.c rexp.c rlist.c utilities.c)
+add_library(rserve-client-static STATIC rserve.c rexp.c rlist.c utilities.c)
 
 ###########################################################
 ## EXECUTABLES
@@ -30,4 +30,4 @@ target_link_libraries(rserve-ocap rserve-client)
 ## COMPILER FLAGS
 ###########################################################
 
-target_compile_options(rserve-client PUBLIC -Wall -Wextra -Werror -std=c99 -g) # -O3 -Os
+target_compile_options(rserve-client PUBLIC -Wall -Wextra -Werror -O2 -std=c99 -g) # -O3 -Os

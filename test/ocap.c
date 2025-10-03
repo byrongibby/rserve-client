@@ -9,8 +9,7 @@
 #include "rserve.h"
 #include "utilities.h"
 
-/* Custom destructor for cvector of string
- */
+/* Custom destructor for cvector of string */
 void free_string(void *str) {
   if (str) {
     free(*(char **)str);
@@ -40,8 +39,7 @@ int main(void)
   rexp_print(&conn.capabilities);
   rexp_print(conn.capabilities.attr);
 
-  /* First argument (user) to auth function (capability)
-   */
+  /* First argument (user) to auth function (capability) */
   memcpy(u, "mike", 5);
   cvector(char *) user = NULL;
   cvector_init(user, 1, free_string);
@@ -51,8 +49,7 @@ int main(void)
   args[0].data = user;
   args[0].attr = NULL;
 
-  /* Second argument (pass) to auth function (capability)
-   */
+  /* Second argument (pass) to auth function (capability) */
   memcpy(p, "mypwd", 6);
   cvector(char *) pass = NULL;
   cvector_init(pass, 1, free_string);
@@ -62,9 +59,8 @@ int main(void)
   args[1].data = pass;
   args[1].attr = NULL;
 
-  /* Create ocap request from capability and arg REXPs
-   */
-  ocap = create_call(&conn.capabilities, args, 2);
+  /* Create ocap request from capability and arg REXPs */
+  assign_call(&ocap, &conn.capabilities, args, 2);
 
   if ((ret = rserve_callocap(&conn, &ocap, &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
@@ -88,7 +84,7 @@ int main(void)
   args2[0].data = src;
   args2[0].attr = NULL;
 
-  ocap2 = create_call(rlist_get((RList *)rx.data, "parse_eval"), args2, 1);
+  assign_call(&ocap2, rlist_get((RList *)rx.data, "parse_eval"), args2, 1);
 
   rexp_clear(&rx);
 
