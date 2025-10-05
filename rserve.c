@@ -150,12 +150,14 @@ typedef struct
 int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp) 
 {
   int n;
+  bool own_header = false;
   char *data = malloc(16);
 
   if (hdr == NULL) {
     hdr = malloc(sizeof(Buffer));
     hdr->data = data;
     hdr->size = 16;
+    own_header = true;
     errno = 0;
     if ((n = read(conn->sockfd, hdr->data, hdr->size)) != 16) {
       if (n < 0) {
@@ -189,7 +191,7 @@ int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp)
     }
   }
 
-  free(hdr);
+  if (own_header) free(hdr);
   free(data);
 
   return 0;
