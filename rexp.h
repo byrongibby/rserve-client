@@ -48,15 +48,15 @@ typedef struct REXP {
 
 void rexp_free(REXP *rx);
 void rexp_clear(REXP *rx);
-REXP *rexp_copy(REXP *ry, REXP *rx);
-bool rexp_is_string(REXP *rx);
-bool rexp_is_vector(REXP *rx);
-bool rexp_is_list(REXP *rx);
-bool rexp_equals(REXP *rx, REXP *ry);
-int rexp_binlen(REXP *rx);
-int rexp_encode(REXP *rx, char *buf, int rxo, int len);
-int rexp_decode(REXP *rx, char *buf, int rxo);
-char *rexp_to_string(REXP *rx, char *sep);
-void rexp_print(REXP *rx);
+REXP *rexp_copy(REXP *ry, const REXP *rx);
+bool rexp_is_string(const REXP *rx);
+bool rexp_is_vector(const REXP *rx);
+bool rexp_is_list(const REXP *rx);
+bool rexp_equals(const REXP *rx, const REXP *ry);
+int rexp_binlen(const REXP *rx);
+int rexp_encode(const REXP *rx, char *buf, int rxo, int len);
+int rexp_decode(REXP *rx, const char *buf, int rxo);
+char *rexp_to_string(const REXP *rx, const char *sep);
+void rexp_print(const REXP *rx);
 
 #endif // REXP_H_

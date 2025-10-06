@@ -16,35 +16,35 @@ typedef enum {
 } RsrvDataType;
 
 typedef enum {
-  CONN_ERR     = 0x30,
-  HSHK_FAILED  = 0x31,
-  DISCONNECTED = 0x32,
-  READ_ERR     = 0x33,
-  DECODE_ERR   = 0x34,
-  ENCODE_ERR   = 0x35,
+  ERR_CONN         = 0x30,
+  ERR_HSHK_FAILED  = 0x31,
+  ERR_DISCONNECTED = 0x32,
+  ERR_READ_SCKT    = 0x33,
+  ERR_DECODE       = 0x34,
+  ERR_ENCODE       = 0x35,
 } RsrvClientError;
 
 typedef enum {
-  AUTH_FAILED     = 0x41,
-  CONN_BROKEN     = 0x42,
-  INV_CMD         = 0x43,
-  INV_PAR         = 0x44,
-  RERROR          = 0x45,
-  IOERROR         = 0x46,
-  NOT_OPEN        = 0x47,
-  ACCESS_DENIED   = 0x48,
-  UNSUPPORTED_CMD = 0x49,
-  UNKNOWN_CMD     = 0x4a,
-  DATA_OVERFLOW   = 0x4b,
-  OBJECT_TOO_BIG  = 0x4c,
-  OUT_OF_MEM      = 0x4d,
-  CTRL_CLOSED     = 0x4e,
-  SESSION_BUSY    = 0x50,
-  DETACH_FAILED   = 0x51,
-  DISABLED        = 0x61,
-  UNAVAILABLE     = 0x62,
-  CRYPTERROR      = 0x63,
-  SECURITYCLOSE   = 0x64,
+  ERR_AUTH_FAILED     = 0x41,
+  ERR_CONN_BROKEN     = 0x42,
+  ERR_INV_CMD         = 0x43,
+  ERR_INV_PAR         = 0x44,
+  ERR_RERROR          = 0x45,
+  ERR_IOERROR         = 0x46,
+  ERR_NOT_OPEN        = 0x47,
+  ERR_ACCESS_DENIED   = 0x48,
+  ERR_UNSUPPORTED_CMD = 0x49,
+  ERR_UNKNOWN_CMD     = 0x4a,
+  ERR_DATA_OVERFLOW   = 0x4b,
+  ERR_OBJECT_TOO_BIG  = 0x4c,
+  ERR_OUT_OF_MEM      = 0x4d,
+  ERR_CTRL_CLOSED     = 0x4e,
+  ERR_SESSION_BUSY    = 0x50,
+  ERR_DETACH_FAILED   = 0x51,
+  ERR_DISABLED        = 0x61,
+  ERR_UNAVAILABLE     = 0x62,
+  ERR_CRYPTERROR      = 0x63,
+  ERR_SECURITYCLOSE   = 0x64,
 } RsrvServerError;
 
 typedef enum {
@@ -64,7 +64,7 @@ typedef enum {
 #define RESP_ERR 0x10002
 
 typedef struct {
-  char *host;
+  const char *host;
   int port;
   int sockfd;
   bool connected;
@@ -75,13 +75,13 @@ typedef struct {
   REXP capabilities;
 } RConnection;
 
-int rserve_connect(RConnection *conn, char *host, int port);
+int rserve_connect(RConnection *conn, const char *host, int port);
 int rserve_disconnect(RConnection* conn);
-int rserve_login(RConnection *conn, char *user, char *pwd);
-int rserve_eval(RConnection *conn, char *cmd, REXP *rx);
-int rserve_callocap(RConnection *conn, REXP *ocap, REXP *rx);
-int rserve_assign(RConnection *conn, char *sym, REXP *rx);
+int rserve_login(const RConnection *conn, const char *user, const char *pwd);
+int rserve_eval(const RConnection *conn, const char *src, REXP *rx);
+int rserve_callocap(const RConnection *conn, const REXP *ocap, REXP *rx);
+int rserve_assign(const RConnection *conn, const char *sym, const REXP *rx);
 int rserve_shutdown(RConnection *conn);
-const char *rserve_error(int err);
+char *rserve_error(int err);
 
 #endif /* RSERVE_H_ */

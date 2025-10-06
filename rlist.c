@@ -21,7 +21,7 @@ static void free_rexp(void *rx)
   }
 }
 
-int rlist_init(RList* rl, size_t capacity, bool has_names)
+int rlist_init(RList *rl, size_t capacity, bool has_names)
 {
   assert(rl);
 
@@ -38,7 +38,7 @@ int rlist_init(RList* rl, size_t capacity, bool has_names)
   return cvector_capacity(rl->values) == capacity ? RLIST_SUCCESS : RLIST_ERROR;
 }
 
-void rlist_free(RList* rl) {
+void rlist_free(RList *rl) {
   assert(rl);
 
   if (rl->names) cvector_free(rl->names);
@@ -47,21 +47,21 @@ void rlist_free(RList* rl) {
   free(rl);
 }
 
-bool rlist_has_names(RList* rl)
+bool rlist_has_names(const RList *rl)
 {
   assert(rl);
 
   return rl->names != NULL;
 }
 
-size_t rlist_size(RList* rl)
+size_t rlist_size(const RList *rl)
 {
   assert(rl);
 
   return cvector_size(rl->values);
 }
 
-static int index_of_name_(RList* rl, char* name)
+static int index_of_name_(const RList *rl, char* name)
 {
   assert(rl);
   assert(name);
@@ -79,7 +79,7 @@ static int index_of_name_(RList* rl, char* name)
   return RLIST_ERROR;
 }
 
-int rlist_add(RList* rl, REXP value)
+int rlist_add(RList *rl, REXP value)
 {
   assert(rl);
 
@@ -96,7 +96,7 @@ int rlist_add(RList* rl, REXP value)
   return cvector_size(rl->values) == size + 1 ? RLIST_SUCCESS : RLIST_ERROR;
 }
 
-int rlist_put(RList* rl, char *name, REXP value)
+int rlist_put(RList *rl, char *name, REXP value)
 {
   assert(rl);
 
@@ -139,7 +139,7 @@ int rlist_assign_name(RList *rl, size_t index, char *name)
   return rl->names[index] == name ? RLIST_SUCCESS : RLIST_ERROR;
 }
 
-REXP *rlist_get(RList* rl, char* name)
+REXP *rlist_get(const RList *rl, char* name)
 {
   assert(rl);
 
@@ -151,14 +151,14 @@ REXP *rlist_get(RList* rl, char* name)
   return NULL;
 }
 
-REXP *rlist_at(RList* rl, size_t index)
+REXP *rlist_at(const RList *rl, size_t index)
 {
   assert(rl);
 
   return cvector_at(rl->values, index);
 }
 
-char *rlist_name_at(RList* rl, size_t index)
+char *rlist_name_at(const RList *rl, size_t index)
 {
   assert(rl);
 

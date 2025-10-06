@@ -7,8 +7,8 @@ if (test == "demo.c") {
   Rserve(debug = TRUE)
 } else if (test == "test.c") {
   # Server with auth (no encryption)
-  Rserve(debug = TRUE, args = "--RS-set auth=1 --RS-set plaintext=1 --RS-set pwdfile=/home/byron/Documents/scratchpad/rsrv-client/test/rserve/password.txt")
+  Rserve(debug = TRUE, args = "--RS-set auth=1 --RS-set plaintext=1 --RS-set pwdfile=/home/byron/Documents/scratchpad/grpcr/src/rserve-client/test/rserve/password.txt")
 } else if (test == "ocap.c") {
   # Server with OCAP
-  Rserve(debug = TRUE, args = "--RS-set qap.oc=1 --RS-set source=/home/byron/Documents/scratchpad/rsrv-client/test/rserve/ocap.R")
+  Rserve(debug = TRUE, args = "--RS-set qap.oc=1 --RS-set source=/home/byron/Documents/scratchpad/grpcr/src/rserve-client/test/rserve/ocap.R")
 }

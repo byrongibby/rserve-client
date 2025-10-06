@@ -24,7 +24,7 @@ size_t rawrexp_size(const REXP *raw)
   return cvector_size((char *)raw->data);
 }
 
-void assign_call(REXP *call, REXP *capability, REXP *args, size_t nargs)
+void assign_call(REXP *call, const REXP *capability, const REXP *args, size_t nargs)
 {
   assert(call);
   assert(capability);

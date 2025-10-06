@@ -10,12 +10,12 @@
 #include "rlist.h"
 #include "rserve.h"
 
-extern int set_hdr(int32_t type, int32_t len, char* y, size_t o);
-extern int get_len(char* y, size_t o);
-extern void set_int(int32_t x, char* y, size_t o);
-extern int get_int(char* y, size_t o);
-extern void set_long(int64_t x, char* y, size_t o);
-extern long get_long(char* y, size_t o);
+extern int set_hdr(int32_t type, int32_t len, char *y, size_t o);
+extern int get_len(const char *y, size_t o);
+extern void set_int(int32_t x, char *y, size_t o);
+extern int get_int(const char *y, size_t o);
+extern void set_long(int64_t x, char *y, size_t o);
+extern long get_long(const char *y, size_t o);
 
 
 /* Custom destructor for cvector of string */
@@ -76,7 +76,7 @@ void rexp_clear(REXP *rx)
   *rx = (REXP) { XT_NULL, NULL, NULL };
 }
 
-REXP *rexp_copy(REXP *ry, REXP *rx)
+REXP *rexp_copy(REXP *ry, const REXP *rx)
 {
   assert(rx);
   assert(ry);
@@ -192,7 +192,7 @@ REXP *rexp_copy(REXP *ry, REXP *rx)
 }
 
 
-bool rexp_is_vector(REXP *rx)
+bool rexp_is_vector(const REXP *rx)
 {
   assert(rx);
 
@@ -203,7 +203,7 @@ bool rexp_is_vector(REXP *rx)
     rx->type == XT_RAW;
 }
 
-bool rexp_is_list(REXP *rx)
+bool rexp_is_list(const REXP *rx)
 {
   assert(rx);
 
@@ -215,7 +215,7 @@ bool rexp_is_list(REXP *rx)
     rx->type == XT_VECTOR_EXP;
 }
 
-bool rexp_is_string(REXP *rx)
+bool rexp_is_string(const REXP *rx)
 {
   assert(rx);
 
@@ -224,7 +224,7 @@ bool rexp_is_string(REXP *rx)
 }
 
 
-int rexp_decode(REXP *rx, char *buf, int rxo)
+int rexp_decode(REXP *rx, const char *buf, int rxo)
 {
   assert(rx);
   assert(buf);
@@ -437,7 +437,7 @@ int rexp_decode(REXP *rx, char *buf, int rxo)
   return rxo;
 }
 
-char *rexp_to_string(REXP *rx, char *sep)
+char *rexp_to_string(const REXP *rx, const char *sep)
 {
   assert(rx);
   assert(sep);
@@ -675,14 +675,14 @@ char *rexp_to_string(REXP *rx, char *sep)
   return realloc(string, size + 1);
 }
 
-void rexp_print(REXP *rx)
+void rexp_print(const REXP *rx)
 {
   char *const s = rexp_to_string(rx, " ");
   puts(s);
   free(s);
 }
 
-bool rexp_equals(REXP *rx, REXP *ry)
+bool rexp_equals(const REXP *rx, const REXP *ry)
 {
   assert(rx);
   assert(ry);
@@ -775,7 +775,7 @@ bool rexp_equals(REXP *rx, REXP *ry)
   return true;
 }
 
-int rexp_binlen(REXP *rx)
+int rexp_binlen(const REXP *rx)
 {
   assert(rx);
 
@@ -847,7 +847,7 @@ int rexp_binlen(REXP *rx)
   return (len > 0xfffff0) ? len + 8 : len + 4;
 }
 
-int rexp_encode(REXP *rx, char *buf, int rxo, int len) 
+int rexp_encode(const REXP *rx, char *buf, int rxo, int len) 
 {
   assert(rx);
 

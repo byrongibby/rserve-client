@@ -29,14 +29,7 @@ int set_hdr(int32_t type, int32_t len, char *y, size_t o)
   return o;
 }
 
-char *new_hdr(int32_t type, int32_t len)
-{
-  char *hdr = malloc(len > 0xfffff0 ? 8 : 4);
-  set_hdr(type, len, hdr, 0);
-  return hdr;
-}
-
-int get_len(char *y, size_t o)
+int get_len(const char *y, size_t o)
 {
   return (*(y + o) & 0x40) > 0
     ?
@@ -58,7 +51,7 @@ void set_int(int32_t x, char *y, size_t o)
   *(y + ++o) = (x & 0xff000000) >> 24;
 }
 
-int get_int(char *y, size_t o)
+int get_int(const char *y, size_t o)
 {
   return (*(y + o) & 0xff) |
     (*(y + o + 1) & 0xff) << 8 |
@@ -72,7 +65,7 @@ void set_long(int64_t x, char *y, size_t o)
   set_int((int)(x >> 32), y, o + 4);
 }
 
-long get_long(char *y, size_t o)
+long get_long(const char *y, size_t o)
 {
   long low = ((long)get_int(y, o)) & 0xffffffffL;
   long hi = (((long)get_int(y, o + 4)) & 0xffffffffL) << 32;
@@ -147,7 +140,7 @@ typedef struct
   char *data;
 } Buffer;
 
-int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp) 
+int response_hdr(const RConnection *conn, Buffer *hdr, RPacket* rp) 
 {
   int n;
   bool own_header = false;
@@ -164,7 +157,7 @@ int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp)
         fprintf(stderr, "ERROR: while reading header, %s\n", strerror(errno));
       }
       fprintf(stderr, "ERROR: while reading header\n");
-      return READ_ERR;
+      return ERR_READ_SCKT;
     }
   }
 
@@ -176,7 +169,7 @@ int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp)
     n = 0;
     if ((rp->data = malloc(rp->size)) == NULL) {
       fprintf(stderr, "ERROR: while reading content, %s\n", strerror(errno));
-      return READ_ERR;
+      return ERR_READ_SCKT;
     }
     if (hdr->size > 16) {
       n = hdr->size - 16;
@@ -186,7 +179,7 @@ int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp)
       errno = 0;
       if ((n += read(conn->sockfd, rp->data + n, rp->size - n)) < 0) {
         fprintf(stderr, "ERROR: while reading content, %s\n", strerror(errno));
-        return READ_ERR;
+        return ERR_READ_SCKT;
       }
     }
   }
@@ -197,12 +190,12 @@ int response_hdr(RConnection *conn, Buffer *hdr, RPacket* rp)
   return 0;
 }
 
-int response(RConnection *conn, RPacket *rp) 
+int response(const RConnection *conn, RPacket *rp) 
 {
   return response_hdr(conn, NULL, rp);
 }
 
-int request(RConnection* conn, int cmd, Buffer *prefix, Buffer *cont, int offset,
+int request(const RConnection *conn, int cmd, Buffer *prefix, Buffer *cont, int offset,
     int len, RPacket *rp)
 {
   int contlen;
@@ -227,18 +220,18 @@ int request(RConnection* conn, int cmd, Buffer *prefix, Buffer *cont, int offset
   if (cmd != -1) {
     if (write(conn->sockfd, hdr, sizeof(hdr)) < 0) {
       fprintf(stderr, "ERROR: Request, failed to write header\n");
-      return READ_ERR;
+      return ERR_READ_SCKT;
     }
     if (prefix != NULL && prefix->size > 0) {
       if (write(conn->sockfd, cont->data + offset, len) < 0) {
         fprintf(stderr, "ERROR: Request, failed to write prefix\n");
-        return READ_ERR;
+        return ERR_READ_SCKT;
       }
     }
     if (cont != NULL && cont->size > 0) {
       if (write(conn->sockfd, cont->data + offset, len) < 0) {
         fprintf(stderr, "ERROR: Request, failed to write content\n");
-        return READ_ERR;
+        return ERR_READ_SCKT;
       }
     }
   }
@@ -246,17 +239,17 @@ int request(RConnection* conn, int cmd, Buffer *prefix, Buffer *cont, int offset
   return response(conn, rp);
 }
 
-int request_bytes(RConnection *conn, int cmd, Buffer *cont, RPacket *rp)
+int request_bytes(const RConnection *conn, int cmd, Buffer *cont, RPacket *rp)
 {
   return request(conn, cmd, NULL, cont, 0, (cont == NULL) ? 0 : cont->size, rp);
 }
 
-int request_cmd(RConnection *conn, int cmd, RPacket *rp)
+int request_cmd(const RConnection *conn, int cmd, RPacket *rp)
 {
   return request_bytes(conn, cmd, NULL, rp);
 }
 
-int request_string(RConnection *conn, int cmd, char *x, RPacket *rp)
+int request_string(const RConnection *conn, int cmd, const char *x, RPacket *rp)
 {
   int sl, ret;
   Buffer rq = { 0 };
@@ -279,14 +272,14 @@ int request_string(RConnection *conn, int cmd, char *x, RPacket *rp)
   return ret;
 }
 
-int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
+int request_rexp(const RConnection *conn, int cmd, const REXP *rx, RPacket *rp)
 {
   int rl, ret;
   Buffer rq = { 0 };
 
   if ((rl = rexp_binlen(rx)) < 0) {
     fprintf(stderr, "ERROR: while encoding, failed to get binary length\n");
-    return ENCODE_ERR;
+    return ERR_ENCODE;
   }
 
   rq.size = rl + ((rl > 0xfffff0) ? 8 : 4);
@@ -299,7 +292,7 @@ int request_rexp(RConnection *conn, int cmd, REXP *rx, RPacket *rp)
   if (rexp_encode(rx, rq.data, rq.size - rl, rl) < 0) {
     fprintf(stderr, "ERROR: while encoding, failed to get binary representation\n");
     free(rq.data);
-    return ENCODE_ERR;
+    return ERR_ENCODE;
   }
 
   ret = request_bytes(conn, cmd, &rq, rp);
@@ -315,17 +308,17 @@ int parse_response(RPacket *rp, REXP *rx)
 
   if (*rp->data != DT_SEXP && *rp->data != (DT_SEXP | DT_LARGE)) {
     fprintf(stderr, "ERROR: while parsing, incorrect data type returned by server\n");
-    return DECODE_ERR;
+    return ERR_DECODE;
   }
 
   if (*rp->data == (DT_SEXP | DT_LARGE)) rxo = 8; else rxo = 4;
 
   if (rp->size <= rxo) {
     fprintf(stderr, "ERROR: while parsing, packet size mismatch\n");
-    return DECODE_ERR;
+    return ERR_DECODE;
   }
 
-  return rexp_decode(rx, rp->data, rxo) > 0 ? 0 : DECODE_ERR;
+  return rexp_decode(rx, rp->data, rxo) > 0 ? 0 : ERR_DECODE;
 }
 
 int init_ocap(RConnection *conn, Buffer *hdr)
@@ -351,7 +344,7 @@ int init_ocap(RConnection *conn, Buffer *hdr)
   return ret;
 }
 
-int rserve_connect(RConnection *conn, char *host, int port)
+int rserve_connect(RConnection *conn, const char *host, const int port)
 {
   assert(strlen(host) > 0);
   assert(port > 0);
@@ -375,7 +368,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
 
 	if ((conn->sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
     fprintf(stderr, "ERROR: creating socket, %s\n", strerror(errno));
-		return CONN_ERR;
+		return ERR_CONN;
 	}
 
 	memset(&serv_addr, 0, sizeof(serv_addr));
@@ -384,15 +377,15 @@ int rserve_connect(RConnection *conn, char *host, int port)
 
 	if ((ret = inet_pton(AF_INET, conn->host, &serv_addr.sin_addr)) < 0) {
     fprintf(stderr, "ERROR: invalid address family, %s\n", strerror(errno));
-		return CONN_ERR;
+		return ERR_CONN;
 	} else if (ret == 0) {
     fprintf(stderr, "ERROR: host string not valid\n");
-		return CONN_ERR;
+		return ERR_CONN;
   }
 
 	if (connect(conn->sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
     fprintf(stderr, "ERROR: connecting socket, %s\n", strerror(errno));
-		return CONN_ERR;
+		return ERR_CONN;
 	} else {
     conn->connected = true;
   }
@@ -400,37 +393,41 @@ int rserve_connect(RConnection *conn, char *host, int port)
 	if ((n = read(conn->sockfd, ids, sizeof(ids))) < 0) {
     fprintf(stderr, "ERROR: reading from socket, %s\n", strerror(errno));
     rserve_disconnect(conn);
-    return CONN_ERR;
+    return ERR_CONN;
 	}
 
   memcpy(attr, ids, attrlen);
 
   if (n >= 16 && strcmp(attr, "RsOC") == 0) {
-    Buffer header = { .data = NULL, .size = n};
+    bool own_data = false;
+    Buffer header = { 0 };
+    header.size = n;
     /* It is possible that the buffering doesn't work out
      * and the first packet is < 32 bytes, in which case
      * we have to re-wrap the array to have the correct length
      * */
     if (n < 32) {
-      char data[n];
-      memcpy(data, ids, n);
-      header.data = data;
+      header.data = malloc(n);
+      own_data = true;
+      memcpy(header.data, ids, n);
     } else {
       header.data = ids;
     }
-    return init_ocap(conn, &header); //FIXME: What about auth below?
+    ret = init_ocap(conn, &header);
+    if (own_data) free(header.data);
+    return ret; //FIXME: What about auth below?
   }
   
   if (n != 32) {
     fprintf(stderr, "ERROR: handshake failed, expected 32 bytes header\n");
     rserve_disconnect(conn);
-    return HSHK_FAILED;
+    return ERR_HSHK_FAILED;
   }
 
   if (strcmp(attr, "Rsrv") != 0) {
     fprintf(stderr, "ERROR: handshake failed, Rsrv signature expected\n");
     rserve_disconnect(conn);
-    return HSHK_FAILED;
+    return ERR_HSHK_FAILED;
   }
 
   memcpy(attr, ids + 4, attrlen);
@@ -439,7 +436,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
   if (conn->rsrv_ver != 103) {
     fprintf(stderr, "ERROR: handshake failed, client/server protocol mismatch\n");
     rserve_disconnect(conn);
-    return HSHK_FAILED;
+    return ERR_HSHK_FAILED;
   }
 
   memcpy(attr, ids + 8, attrlen);
@@ -447,7 +444,7 @@ int rserve_connect(RConnection *conn, char *host, int port)
   if (strcmp(attr, "QAP1") != 0) {
     fprintf(stderr, "ERROR: handshake failed, unupported transfer protocol\n");
     rserve_disconnect(conn);
-    return HSHK_FAILED;
+    return ERR_HSHK_FAILED;
   }
 
   for (int i = 12; i < 32; i += 4) {
@@ -490,19 +487,17 @@ int rserve_disconnect(RConnection* conn)
   return ret;
 }
 
-int rserve_login(RConnection *conn, char *user, char *pwd)
+int rserve_login(const RConnection *conn, const char *user, const char *pwd)
 {
-  char cred[strlen(user) + strlen(pwd) + 2];
-  RPacket rp = { 0, 0, NULL };
+  char *cred = calloc(strlen(user) + strlen(pwd) + 2, sizeof(char));
+  RPacket rp = { 0 };
 
   if (!conn->connected) {
     fprintf(stderr, "ERROR: Login failed, not connected\n");
-    return CONN_ERR;
+    return ERR_CONN;
   }
 
   if (!conn->auth_req) return 0;
-
-	memset(&cred, 0, sizeof(cred));
 
   strcat(cred, user);
   strcat(cred, "\n");
@@ -518,13 +513,14 @@ int rserve_login(RConnection *conn, char *user, char *pwd)
   }
 
   rpacket_clear(&rp);
+  free(cred);
 
   fprintf(stderr, "INFO: Login success, logged in to Rserve\n");
 
   return 0;
 }
 
-int rserve_eval(RConnection *conn, char *x, REXP *rx)
+int rserve_eval(const RConnection *conn, const char *src, REXP *rx)
 {
   assert(conn != NULL);
   assert(conn->connected);
@@ -532,13 +528,13 @@ int rserve_eval(RConnection *conn, char *x, REXP *rx)
 
   if (!conn->connected) {
     fprintf(stderr, "ERROR: during eval, not connected\n");
-    return DISCONNECTED;
+    return ERR_DISCONNECTED;
   }
 
   int ret = 0;
   RPacket rp = { 0 }; 
 
-  if ((ret = request_string(conn, CMD_EVAL, x, &rp)) != 0) {
+  if ((ret = request_string(conn, CMD_EVAL, src, &rp)) != 0) {
     rpacket_clear(&rp);
     fprintf(stderr, "ERROR: during eval, request failed\n");
     return ret;
@@ -562,7 +558,7 @@ int rserve_eval(RConnection *conn, char *x, REXP *rx)
   return ret;
 }
 
-int rserve_callocap(RConnection *conn, REXP *ocap, REXP *rx)
+int rserve_callocap(const RConnection *conn, const REXP *ocap, REXP *rx)
 {
   assert(conn);
   assert(ocap);
@@ -598,7 +594,7 @@ int rserve_callocap(RConnection *conn, REXP *ocap, REXP *rx)
   return ret;
 }
 
-int rserve_assign(RConnection *conn, char *sym, REXP *rx)
+int rserve_assign(const RConnection *conn, const char *sym, const REXP *rx)
 {
   assert(conn);
   assert(sym);
@@ -615,7 +611,7 @@ int rserve_assign(RConnection *conn, char *sym, REXP *rx)
 
   if ((rl = rexp_binlen(rx)) < 0) {
     fprintf(stderr, "ERROR: while encoding, failed to get binary length\n");
-    return ENCODE_ERR;
+    return ERR_ENCODE;
   }
 
   rq.size = sl + rl + ((rl > 0xfffff0) ? 12 : 8);
@@ -623,7 +619,7 @@ int rserve_assign(RConnection *conn, char *sym, REXP *rx)
   if ((rq.data = calloc(rq.size, sizeof(char))) == NULL) {
     fprintf(stderr, "ERROR: while encoding, failed to alloc request\n");
     //ErrNo?
-    return ENCODE_ERR;
+    return ERR_ENCODE;
   }
 
   set_hdr(DT_STRING, sl, rq.data, 0);
@@ -666,7 +662,7 @@ int rserve_shutdown(RConnection *conn)
   assert(conn->connected);
 
   int ret = 0;
-  RPacket rp = { 0, 0, NULL }; 
+  RPacket rp = { 0 }; 
 
   if ((ret = request_cmd(conn, CMD_SHUTDOWN, &rp)) != 0) {
     rpacket_clear(&rp);
@@ -689,20 +685,20 @@ int rserve_shutdown(RConnection *conn)
   return ret;
 }
 
-const char *rserve_error(int err)
+char *rserve_error(int err)
 {
   switch (err) {
-    case CONN_ERR:
+    case ERR_CONN:
       return "Client error connecting to Rserve";
-    case HSHK_FAILED:
+    case ERR_HSHK_FAILED:
       return "Client failed to successfully complete handshake with Rserve";
-    case DISCONNECTED:
+    case ERR_DISCONNECTED:
       return "Client not connected to an Rserve instance";
-    case READ_ERR:
+    case ERR_READ_SCKT:
       return "Client failed to read from Rserve";
-    case DECODE_ERR:
+    case ERR_DECODE:
       return "Client failed to decode Rserve response";
-    case ENCODE_ERR:
+    case ERR_ENCODE:
       return "Client failed to encode Rserve request";
     default:
       return "Unknown error";

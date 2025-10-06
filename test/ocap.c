@@ -21,7 +21,7 @@ int main(void)
   int ret;
   char *u = malloc(5), *p = malloc(6);
   RConnection conn = { 0 };
-  REXP rx = { 0 }, ocap = { 0 }, args[2] = { 0 };
+  REXP rx = { 0 }, ocap = { 0 }, capability = { 0 }, args[2] = { 0 };
 
   if ((ret = rserve_connect(&conn, "127.0.0.1", 6311)) == 0) {
     assert(strcmp(conn.host, "127.0.0.1") == 0);
@@ -35,9 +35,11 @@ int main(void)
     return 1;
   }
 
+  rexp_copy(&capability, &conn.capabilities);
+
   printf("Server OCAPs:\n");
-  rexp_print(&conn.capabilities);
-  rexp_print(conn.capabilities.attr);
+  rexp_print(&capability);
+  rexp_print(capability.attr);
 
   /* First argument (user) to auth function (capability) */
   memcpy(u, "mike", 5);
@@ -60,7 +62,7 @@ int main(void)
   args[1].attr = NULL;
 
   /* Create ocap request from capability and arg REXPs */
-  assign_call(&ocap, &conn.capabilities, args, 2);
+  assign_call(&ocap, &capability, args, 2);
 
   if ((ret = rserve_callocap(&conn, &ocap, &rx)) != 0) {
     printf("Rserve error: %s\n", rserve_error(ret));
@@ -84,7 +86,9 @@ int main(void)
   args2[0].data = src;
   args2[0].attr = NULL;
 
-  assign_call(&ocap2, rlist_get((RList *)rx.data, "parse_eval"), args2, 1);
+  rexp_copy(&capability, rlist_get((RList *)rx.data, "parse_eval"));
+
+  assign_call(&ocap2, &capability, args2, 1);
 
   rexp_clear(&rx);
 
