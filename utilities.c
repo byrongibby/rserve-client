@@ -30,10 +30,13 @@ void assign_call(REXP *call, const REXP *capability, const REXP *args, size_t na
   assert(capability);
   assert(call->data == NULL);
 
+  REXP ocap = { 0 };
   RList *rl = malloc(sizeof(RList));
 
+  rexp_copy(&ocap, capability);
+
   rlist_init(rl, nargs + 1, false);
-  rlist_add(rl, *capability);
+  rlist_add(rl, ocap);
   for (size_t i = 0; i < nargs; ++i) rlist_add(rl, args[i]);
   call->type = XT_LANG_NOTAG;
   call->data = rl;
